@@ -8,5 +8,6 @@ sealed class Screen(val route: String) {
         fun withSession(id: String) = "training/$id"
     }
     data object Nutrition  : Screen("nutrition")
+    data object Planner    : Screen("planner")
     data object Settings   : Screen("settings")
 }

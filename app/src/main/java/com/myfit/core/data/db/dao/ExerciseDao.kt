@@ -43,4 +43,13 @@ interface ExerciseDao {
         ORDER BY te.position
     """)
     suspend fun getExercisesForTemplateOnce(templateId: String): List<ExerciseEntity>
+
+    @Query("SELECT * FROM template_exercises WHERE templateId = :templateId ORDER BY position")
+    suspend fun getTemplateExercisesOnce(templateId: String): List<TemplateExerciseEntity>
+
+    @Query("DELETE FROM template_exercises WHERE id = :id")
+    suspend fun deleteTemplateExercise(id: String)
+
+    @Query("DELETE FROM template_exercises WHERE templateId = :templateId")
+    suspend fun deleteAllTemplateExercises(templateId: String)
 }

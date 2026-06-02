@@ -58,7 +58,8 @@ fun ActiveWorkoutScreen(
             ExerciseTabRow(
                 slots = state.exerciseSlots,
                 currentIndex = state.currentSlotIndex,
-                onTabSelect = vm::switchToSlot
+                onTabSelect = vm::switchToSlot,
+                onAddExercise = vm::showExercisePicker
             )
         }
 
@@ -172,7 +173,8 @@ private fun WorkoutTopBar(onAddExercise: () -> Unit, onFinish: () -> Unit) {
 private fun ExerciseTabRow(
     slots: List<ExerciseSlot>,
     currentIndex: Int,
-    onTabSelect: (Int) -> Unit
+    onTabSelect: (Int) -> Unit,
+    onAddExercise: () -> Unit
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth().background(Surface1).padding(horizontal = 8.dp, vertical = 6.dp),
@@ -196,6 +198,16 @@ private fun ExerciseTabRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+        }
+        item {
+            Box(
+                modifier = Modifier
+                    .background(Performance.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                    .clickable(onClick = onAddExercise)
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text("+ ADD", style = MaterialTheme.typography.labelMedium, color = Performance)
             }
         }
     }

@@ -3,6 +3,7 @@ package com.myfit.feature.nutrition
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.myfit.core.data.db.dao.NutritionDao
+import com.myfit.core.data.db.entity.FoodItemEntity
 import com.myfit.core.data.db.entity.NutritionLogEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +22,32 @@ class NutritionViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(NutritionUiState())
     val state = _state.asStateFlow()
+
+    private val _allFoods = MutableStateFlow<List<FoodItemEntity>>(emptyList())
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery = _searchQuery.asStateFlow()
+
+    fun setSearchQuery(q: String) {
+        _searchQuery.value = q
+        val query = q.trim().lowercase()
+        val results = if (query.isEmpty()) emptyList()
+        else _allFoods.value.filter { it.name.lowercase().contains(query) }
+        _state.update { it.copy(searchResults = results) }
+    }
+
+    fun addCustomFood(name: String, cal: Float, protein: Float, carbs: Float, fat: Float) {
+        viewModelScope.launch {
+            dao.insertFoodItem(FoodItemEntity(
+                id             = "custom_${UUID.randomUUID()}",
+                name           = name.trim(),
+                caloriesPer100 = cal,
+                proteinPer100  = protein,
+                carbsPer100    = carbs,
+                fatPer100      = fat,
+                isEmbedded     = false
+            ))
+        }
+    }
 
     init {
         // Observe all foods reactively — fires again when seed completes after DB creation
@@ -50,7 +77,8 @@ class NutritionViewModel @Inject constructor(
         _state.update { it.copy(todayEntries = entries, dailyMacros = DailyMacros.from(entries)) }
     }
 
-    private suspend fun refreshWithFoods(allFoods: List<com.myfit.core.data.db.entity.FoodItemEntity>) {
+    private suspend fun refreshWithFoods(allFoods: List<FoodItemEntity>) {
+        _allFoods.value = allFoods
         val topIds    = dao.getTopLoggedFoodIds()
         val quickItems = if (topIds.isNotEmpty()) {
             val byId = allFoods.associateBy { it.id }

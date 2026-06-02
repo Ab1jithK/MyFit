@@ -30,4 +30,13 @@ interface WorkoutDao {
 
     @Query("SELECT * FROM workout_templates WHERE dayOfWeek = :dayOfWeek")
     suspend fun getTemplatesForDay(dayOfWeek: Int): List<WorkoutTemplateEntity>
+
+    @Update
+    suspend fun updateTemplate(template: WorkoutTemplateEntity)
+
+    @Query("DELETE FROM workout_templates WHERE id = :id")
+    suspend fun deleteTemplate(id: String)
+
+    @Query("SELECT * FROM workout_sessions WHERE startedAt >= :fromMs")
+    suspend fun getAllSessionsSince(fromMs: Long): List<WorkoutSessionEntity>
 }

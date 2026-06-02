@@ -32,6 +32,7 @@ data class DailyMacros(val calories: Float, val proteinG: Float, val carbsG: Flo
 
 data class NutritionUiState(
     val quickItems: List<QuickItem> = emptyList(),
+    val searchResults: List<FoodItemEntity> = emptyList(),
     val todayEntries: List<NutritionLogEntry> = emptyList(),
     val dailyMacros: DailyMacros = DailyMacros(0f, 0f, 0f, 0f),
     val pendingItem: QuickItem? = null,

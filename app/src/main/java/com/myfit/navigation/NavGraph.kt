@@ -2,6 +2,7 @@ package com.myfit.navigation
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.ShowChart
@@ -18,6 +19,7 @@ import com.myfit.core.ui.theme.*
 import com.myfit.feature.analytics.AnalyticsScreen
 import com.myfit.feature.home.HomeScreen
 import com.myfit.feature.nutrition.NutritionScreen
+import com.myfit.feature.planner.PlannerScreen
 import com.myfit.feature.onboarding.OnboardingScreen
 import com.myfit.feature.onboarding.OnboardingViewModel
 import com.myfit.feature.training.ActiveWorkoutScreen
@@ -25,9 +27,10 @@ import com.myfit.feature.training.ActiveWorkoutScreen
 private data class BottomNavItem(val screen: Screen, val icon: ImageVector, val label: String)
 
 private val bottomNavItems = listOf(
-    BottomNavItem(Screen.Home,      Icons.Default.Home,       "HOME"),
-    BottomNavItem(Screen.Analytics, Icons.Default.ShowChart,  "ANALYTICS"),
-    BottomNavItem(Screen.Nutrition, Icons.Default.Restaurant, "NUTRITION")
+    BottomNavItem(Screen.Home,      Icons.Default.Home,          "HOME"),
+    BottomNavItem(Screen.Analytics, Icons.Default.ShowChart,     "ANALYTICS"),
+    BottomNavItem(Screen.Nutrition, Icons.Default.Restaurant,    "NUTRITION"),
+    BottomNavItem(Screen.Planner,   Icons.Default.CalendarMonth, "PLANNER")
 )
 
 @Composable
@@ -37,7 +40,7 @@ fun NavGraph() {
     val currentRoute = currentBackStack?.destination?.route
 
     val showBottomBar = currentRoute in setOf(
-        Screen.Home.route, Screen.Analytics.route, Screen.Nutrition.route
+        Screen.Home.route, Screen.Analytics.route, Screen.Nutrition.route, Screen.Planner.route
     )
 
     Scaffold(
@@ -114,6 +117,10 @@ fun NavGraph() {
 
             composable(Screen.Nutrition.route) {
                 NutritionScreen()
+            }
+
+            composable(Screen.Planner.route) {
+                PlannerScreen()
             }
 
             composable(Screen.Training.route) {
