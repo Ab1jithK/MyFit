@@ -25,6 +25,9 @@ interface ExerciseDao {
     @Query("SELECT * FROM exercises WHERE name LIKE '%' || :query || '%' ORDER BY name")
     suspend fun searchExercises(query: String): List<ExerciseEntity>
 
+    @Query("SELECT * FROM exercises WHERE id = :id")
+    suspend fun getExerciseById(id: String): ExerciseEntity?
+
     @Query("""
         SELECT e.* FROM exercises e
         INNER JOIN template_exercises te ON e.id = te.exerciseId
