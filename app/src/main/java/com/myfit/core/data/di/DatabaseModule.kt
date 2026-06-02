@@ -29,6 +29,7 @@ object DatabaseModule {
             override fun onCreate(sqLiteDb: SupportSQLiteDatabase) {
                 CoroutineScope(Dispatchers.IO).launch {
                     db?.exerciseDao()?.insertExercises(SeedExercises.all)
+                    db?.nutritionDao()?.insertFoodItems(SeedFoods.all)
                 }
             }
         }
