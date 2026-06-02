@@ -29,4 +29,5 @@ abstract class MyFitDatabase : RoomDatabase() {
     abstract fun exerciseDao(): ExerciseDao
     abstract fun nutritionDao(): NutritionDao
     abstract fun cnsDao(): CnsDao
+    abstract fun syncEventDao(): SyncEventDao
 }

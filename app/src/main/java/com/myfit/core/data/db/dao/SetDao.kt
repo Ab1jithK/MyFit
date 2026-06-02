@@ -41,4 +41,7 @@ interface SetDao {
 
     @Query("SELECT * FROM sets WHERE recordedAt >= :fromMs ORDER BY recordedAt DESC")
     suspend fun getAllSetsSince(fromMs: Long): List<SetEntity>
+
+    @Query("SELECT * FROM sets WHERE id = :id")
+    suspend fun getSetById(id: String): SetEntity?
 }

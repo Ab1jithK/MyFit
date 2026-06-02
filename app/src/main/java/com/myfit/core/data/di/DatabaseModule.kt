@@ -45,6 +45,7 @@ object DatabaseModule {
     @Provides fun provideExerciseDao(db: MyFitDatabase): ExerciseDao = db.exerciseDao()
     @Provides fun provideNutritionDao(db: MyFitDatabase): NutritionDao = db.nutritionDao()
     @Provides fun provideCnsDao(db: MyFitDatabase): CnsDao = db.cnsDao()
+    @Provides fun provideSyncEventDao(db: MyFitDatabase): SyncEventDao = db.syncEventDao()
 
     @Provides
     @Singleton
