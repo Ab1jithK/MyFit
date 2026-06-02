@@ -38,4 +38,7 @@ interface SetDao {
 
     @Query("SELECT * FROM set_biometrics WHERE setId = :setId")
     suspend fun getBiometrics(setId: String): SetBiometricsEntity?
+
+    @Query("SELECT * FROM sets WHERE recordedAt >= :fromMs ORDER BY recordedAt DESC")
+    suspend fun getAllSetsSince(fromMs: Long): List<SetEntity>
 }

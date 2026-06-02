@@ -1,11 +1,13 @@
 package com.myfit.feature.home
 
+import com.myfit.core.domain.PrehabMove
+import com.myfit.core.domain.model.BriefingBullet
+
 sealed class DashboardState {
     data class PreWorkout(
         val scheduledTemplateName: String,
-        val fatigueScore: Float,
-        val velocityTarget: Float?,
-        val prehabFocusMuscles: List<String>
+        val briefingBullets: List<BriefingBullet>,
+        val prehabMoves: List<PrehabMove>
     ) : DashboardState()
 
     data class ActiveTraining(

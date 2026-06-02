@@ -11,6 +11,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.myfit.core.ui.theme.*
+import com.myfit.feature.home.component.AiBriefingCard
+import com.myfit.feature.home.component.PrehabPlayer
 
 @Composable
 fun HomeScreen(
@@ -27,8 +29,8 @@ fun HomeScreen(
     Scaffold(containerColor = Black, contentColor = TextPrimary) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when (val s = state) {
-                DashboardState.Idle              -> IdleView(onStartWorkout = vm::startWorkout)
-                is DashboardState.PreWorkout     -> PreWorkoutView(s, onStart = vm::startWorkout)
+                DashboardState.Idle              -> IdleView(vm::startWorkout)
+                is DashboardState.PreWorkout     -> PreWorkoutView(s, vm::startWorkout)
                 is DashboardState.ActiveTraining -> ActiveView(s)
                 DashboardState.Analytical        -> AnalyticalView()
             }
@@ -43,11 +45,7 @@ private fun IdleView(onStartWorkout: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "NO WORKOUT SCHEDULED",
-            style = MaterialTheme.typography.labelLarge,
-            color = TextSecondary
-        )
+        Text("NO WORKOUT SCHEDULED", style = MaterialTheme.typography.labelLarge, color = TextSecondary)
         Spacer(Modifier.height(24.dp))
         Button(
             onClick = onStartWorkout,
@@ -69,24 +67,15 @@ private fun PreWorkoutView(state: DashboardState.PreWorkout, onStart: () -> Unit
             .navigationBarsPadding()
             .padding(16.dp)
     ) {
-        Surface(color = Surface1, modifier = Modifier.fillMaxWidth().weight(0.25f)) {
-            Column(Modifier.padding(16.dp)) {
-                Text("AI BRIEFING", style = MaterialTheme.typography.labelLarge, color = Active)
-                Spacer(Modifier.height(8.dp))
-                val pct = (state.fatigueScore * 100).toInt()
-                Text(
-                    "⬤  CNS Load: $pct% — ${fatigueLabel(state.fatigueScore)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = fatigueColor(state.fatigueScore)
-                )
-                Text(
-                    "⬤  Velocity baseline unavailable — log sets to calibrate",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
-                )
-            }
-        }
+        // Top 25% — AI Briefing with real CNS bullets
+        AiBriefingCard(
+            bullets = state.briefingBullets,
+            modifier = Modifier.fillMaxWidth().weight(0.25f)
+        )
+
         Spacer(Modifier.height(8.dp))
+
+        // Middle 50% — Today's workout + CTA
         Surface(color = Surface1, modifier = Modifier.fillMaxWidth().weight(0.50f)) {
             Column(
                 Modifier.fillMaxSize().padding(16.dp),
@@ -113,21 +102,14 @@ private fun PreWorkoutView(state: DashboardState.PreWorkout, onStart: () -> Unit
                 }
             }
         }
+
         Spacer(Modifier.height(8.dp))
-        Surface(color = Surface1, modifier = Modifier.fillMaxWidth().weight(0.25f)) {
-            Column(Modifier.padding(16.dp)) {
-                Text(
-                    "PREHAB / MOBILITY",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Caution
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Configure target muscles in settings",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
+
+        // Bottom 25% — Prehab player with muscle-targeted moves
+        PrehabPlayer(
+            moves = state.prehabMoves,
+            modifier = Modifier.fillMaxWidth().weight(0.25f)
+        )
     }
 }
 
@@ -149,23 +131,6 @@ private fun ActiveView(state: DashboardState.ActiveTraining) {
 @Composable
 private fun AnalyticalView() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            "REST DAY — Analytics Phase 4",
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextDisabled
-        )
+        Text("REST DAY — Analytics Phase 4", style = MaterialTheme.typography.bodyMedium, color = TextDisabled)
     }
-}
-
-private fun fatigueLabel(score: Float) = when {
-    score < 0.3f -> "recovery optimal"
-    score < 0.6f -> "moderate load"
-    score < 0.8f -> "elevated — monitor velocity"
-    else         -> "critical — reduce top-set load"
-}
-
-private fun fatigueColor(score: Float) = when {
-    score < 0.3f -> Performance
-    score < 0.6f -> Caution
-    else         -> Warning
 }

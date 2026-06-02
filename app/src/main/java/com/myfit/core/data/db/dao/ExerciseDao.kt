@@ -35,4 +35,12 @@ interface ExerciseDao {
         ORDER BY te.position
     """)
     fun getExercisesForTemplate(templateId: String): Flow<List<ExerciseEntity>>
+
+    @Query("""
+        SELECT e.* FROM exercises e
+        INNER JOIN template_exercises te ON e.id = te.exerciseId
+        WHERE te.templateId = :templateId
+        ORDER BY te.position
+    """)
+    suspend fun getExercisesForTemplateOnce(templateId: String): List<ExerciseEntity>
 }
