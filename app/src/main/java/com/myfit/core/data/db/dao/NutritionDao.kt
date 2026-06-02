@@ -39,4 +39,18 @@ interface NutritionDao {
 
     @Query("UPDATE quick_stacks SET useCount = useCount + 1, lastUsedAt = :now WHERE id = :id")
     suspend fun incrementQuickStackUse(id: String, now: Long)
+
+    @Query("""
+        SELECT foodId FROM nutrition_log
+        GROUP BY foodId
+        ORDER BY COUNT(id) DESC, MAX(loggedAt) DESC
+        LIMIT 10
+    """)
+    suspend fun getTopLoggedFoodIds(): List<String>
+
+    @Query("SELECT * FROM nutrition_log WHERE loggedAt >= :midnightMs ORDER BY loggedAt DESC")
+    suspend fun getTodayLog(midnightMs: Long): List<NutritionLogEntity>
+
+    @Query("SELECT * FROM food_items WHERE id IN (:ids)")
+    suspend fun getFoodsByIds(ids: List<String>): List<FoodItemEntity>
 }
