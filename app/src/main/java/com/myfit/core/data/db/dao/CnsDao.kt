@@ -18,4 +18,7 @@ interface CnsDao {
         ORDER BY recordedAt ASC
     """)
     fun getSnapshotsForRange(fromMs: Long, toMs: Long): Flow<List<CnsSnapshotEntity>>
+
+    @Query("SELECT * FROM cns_snapshots WHERE recordedAt >= :fromMs ORDER BY recordedAt ASC")
+    suspend fun getSnapshotsSince(fromMs: Long): List<CnsSnapshotEntity>
 }
