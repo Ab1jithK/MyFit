@@ -48,7 +48,7 @@ class HomeViewModel @Inject constructor(
         val todayTemplates = workoutDao.getTemplatesForDay(dayOfWeek)
 
         if (todayTemplates.isEmpty()) {
-            emit(DashboardState.Analytical)
+            emit(DashboardState.Idle)
             return@flow
         }
 

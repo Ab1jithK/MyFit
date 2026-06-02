@@ -162,11 +162,11 @@ class ActiveWorkoutViewModel @Inject constructor(
 
     private fun appendNumpad(current: String, key: String): String {
         if (key == "." && current.contains(".")) return current
-        if (current == "0" && key != ".") return key
+        if (key == "." && current.isEmpty()) return "0."
         if (current.length >= 6) return current
         return current + key
     }
 
     private fun deleteNumpad(current: String): String =
-        if (current.length <= 1) "0" else current.dropLast(1)
+        if (current.length <= 1) "" else current.dropLast(1)
 }

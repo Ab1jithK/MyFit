@@ -7,6 +7,7 @@ import com.myfit.core.data.db.entity.NutritionLogEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -21,35 +22,57 @@ class NutritionViewModel @Inject constructor(
     private val _state = MutableStateFlow(NutritionUiState())
     val state = _state.asStateFlow()
 
-    init { refresh() }
+    init {
+        // Observe all foods reactively — fires again when seed completes after DB creation
+        viewModelScope.launch {
+            dao.getAllFoodItems().collectLatest { allFoods ->
+                if (allFoods.isEmpty()) return@collectLatest
+                refreshWithFoods(allFoods)
+            }
+        }
+    }
 
     fun refresh() {
-        viewModelScope.launch {
-            val topIds   = dao.getTopLoggedFoodIds()
-            val topFoods = if (topIds.isNotEmpty()) dao.getFoodsByIds(topIds) else emptyList()
-            val ordered  = topIds.mapNotNull { id -> topFoods.firstOrNull { it.id == id } }
-            val quickItems = if (ordered.isNotEmpty()) {
-                ordered.map { f -> QuickItem(f, defaultGrams = 100f) }
-            } else {
-                dao.getFoodsByIds(DEFAULT_QUICK_IDS).map { QuickItem(it, defaultGrams = 100f) }
-            }
+        viewModelScope.launch { refreshLog() }
+    }
 
-            val midnight   = todayMidnightMs()
-            val rawLog     = dao.getTodayLog(midnight)
-            val logFoodIds = rawLog.map { it.foodId }.distinct()
-            val logFoods   = dao.getFoodsByIds(logFoodIds).associateBy { it.id }
-            val entries    = rawLog.mapNotNull { log ->
-                logFoods[log.foodId]?.let { NutritionLogEntry(log, it) }
-            }
+    private suspend fun refreshLog() {
+        val midnight = todayMidnightMs()
+        val rawLog   = dao.getTodayLog(midnight)
+        val allFoods = _state.value.quickItems.map { it.food } +
+                       rawLog.map { log -> _state.value.todayEntries.find { it.log.id == log.id }?.food }
+                           .filterNotNull()
+        // Re-fetch log foods from DB to be accurate
+        val logFoodIds = rawLog.map { it.foodId }.distinct()
+        val logFoods   = if (logFoodIds.isNotEmpty()) dao.getFoodsByIds(logFoodIds) else emptyList()
+        val byId       = logFoods.associateBy { it.id }
+        val entries    = rawLog.mapNotNull { log -> byId[log.foodId]?.let { NutritionLogEntry(log, it) } }
+        _state.update { it.copy(todayEntries = entries, dailyMacros = DailyMacros.from(entries)) }
+    }
 
-            _state.update {
-                it.copy(
-                    quickItems   = quickItems,
-                    todayEntries = entries,
-                    dailyMacros  = DailyMacros.from(entries),
-                    isLoading    = false
-                )
-            }
+    private suspend fun refreshWithFoods(allFoods: List<com.myfit.core.data.db.entity.FoodItemEntity>) {
+        val topIds    = dao.getTopLoggedFoodIds()
+        val quickItems = if (topIds.isNotEmpty()) {
+            val byId = allFoods.associateBy { it.id }
+            topIds.mapNotNull { byId[it] }.map { QuickItem(it, defaultGrams = 100f) }
+        } else {
+            val byId = allFoods.associateBy { it.id }
+            DEFAULT_QUICK_IDS.mapNotNull { byId[it] }.map { QuickItem(it, defaultGrams = 100f) }
+                .ifEmpty { allFoods.take(10).map { QuickItem(it, defaultGrams = 100f) } }
+        }
+
+        val midnight   = todayMidnightMs()
+        val rawLog     = dao.getTodayLog(midnight)
+        val byId       = allFoods.associateBy { it.id }
+        val entries    = rawLog.mapNotNull { log -> byId[log.foodId]?.let { NutritionLogEntry(log, it) } }
+
+        _state.update {
+            it.copy(
+                quickItems   = quickItems,
+                todayEntries = entries,
+                dailyMacros  = DailyMacros.from(entries),
+                isLoading    = false
+            )
         }
     }
 
