@@ -11,6 +11,7 @@ import androidx.navigation.compose.rememberNavController
 import com.myfit.feature.home.HomeScreen
 import com.myfit.feature.onboarding.OnboardingScreen
 import com.myfit.feature.onboarding.OnboardingViewModel
+import com.myfit.feature.training.ActiveWorkoutScreen
 
 @Composable
 fun NavGraph() {
@@ -21,7 +22,6 @@ fun NavGraph() {
         composable(Screen.Onboarding.route) {
             val vm: OnboardingViewModel = hiltViewModel()
             val completed by vm.onboardingCompleted.collectAsState()
-
             LaunchedEffect(completed) {
                 if (completed) {
                     navController.navigate(Screen.Home.route) {
@@ -29,14 +29,30 @@ fun NavGraph() {
                     }
                 }
             }
-
             if (!completed) {
                 OnboardingScreen(onComplete = { vm.markOnboardingComplete() })
             }
         }
 
         composable(Screen.Home.route) {
-            HomeScreen(navController = navController)
+            HomeScreen(
+                navController = navController,
+                onStartWorkout = { sessionId ->
+                    navController.navigate(Screen.Training.withSession(sessionId))
+                }
+            )
+        }
+
+        composable(Screen.Training.route) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getString("sessionId")
+                ?: return@composable
+            ActiveWorkoutScreen(
+                onFinish = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Training.route) { inclusive = true }
+                    }
+                }
+            )
         }
     }
 }
