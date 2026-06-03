@@ -427,14 +427,14 @@ private fun AddTemplateSheet(
     var step by remember { mutableIntStateOf(1) }
     var name by remember { mutableStateOf("") }
     val stagedExercises = remember(stagedIds, allExercises) { allExercises.filter { it.id in stagedIds } }
-    val panelHeight = LocalConfiguration.current.screenHeightDp.dp * 0.92f
 
     Dialog(
         onDismissRequest = { if (step == 1 && stagedIds.isEmpty()) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
+        // fillMaxSize on the root gives every child a real bounded constraint
         Box(modifier = Modifier.fillMaxSize()) {
-            // Scrim — tap outside cancels only when nothing staged
+            // Scrim
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -442,12 +442,13 @@ private fun AddTemplateSheet(
                     .clickable { if (step == 1 && stagedIds.isEmpty()) onDismiss() }
             )
 
-            // Panel: explicit height so weight(1f) on list gets a bounded constraint
+            // Panel: fillMaxHeight inside a bounded Box works; padding(top) leaves scrim visible
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(panelHeight)
+                    .fillMaxHeight()
+                    .padding(top = 72.dp)   // scrim gap at top
                     .background(Surface1, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
             ) {
                 if (step == 1) {
