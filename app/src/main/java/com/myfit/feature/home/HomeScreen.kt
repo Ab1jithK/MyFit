@@ -16,6 +16,7 @@ import com.myfit.ble.PhoneSyncStatus
 import com.myfit.core.ui.theme.*
 import com.myfit.feature.home.component.AiBriefingCard
 import com.myfit.feature.home.component.PrehabPlayer
+import com.myfit.navigation.Screen
 
 @Composable
 fun HomeScreen(
@@ -34,7 +35,12 @@ fun HomeScreen(
 
     Scaffold(containerColor = Black, contentColor = TextPrimary) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            SyncStatusBar(bleStatus, lastSyncLabel)
+            ConnectionCard(
+                status     = bleStatus,
+                lastSync   = lastSyncLabel,
+                onConnect  = vm::startScan,
+                onOpenLogs = { navController.navigate(Screen.SyncLog.route) }
+            )
             Box(modifier = Modifier.weight(1f)) {
                 when (val s = state) {
                     DashboardState.Idle              -> IdleView(vm::startWorkout)
@@ -48,7 +54,12 @@ fun HomeScreen(
 }
 
 @Composable
-private fun SyncStatusBar(status: PhoneSyncStatus, lastSync: String) {
+private fun ConnectionCard(
+    status: PhoneSyncStatus,
+    lastSync: String,
+    onConnect: () -> Unit,
+    onOpenLogs: () -> Unit
+) {
     val (dotColor, label) = when (status) {
         PhoneSyncStatus.Done       -> Performance to lastSync
         PhoneSyncStatus.Syncing    -> Active      to "Syncing…"
@@ -57,16 +68,40 @@ private fun SyncStatusBar(status: PhoneSyncStatus, lastSync: String) {
         PhoneSyncStatus.Error      -> Warning     to "Sync error"
         PhoneSyncStatus.Idle       -> TextDisabled to lastSync
     }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Surface1)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Box(Modifier.size(8.dp).background(dotColor, CircleShape))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+    val showConnect = status == PhoneSyncStatus.Idle || status == PhoneSyncStatus.Error
+
+    Surface(onClick = onOpenLogs, color = Surface1, tonalElevation = 0.dp) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment    = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(Modifier.size(8.dp).background(dotColor, CircleShape))
+                Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary, modifier = Modifier.weight(1f))
+                if (showConnect) {
+                    TextButton(
+                        onClick        = onConnect,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Text("CONNECT", style = MaterialTheme.typography.labelSmall, color = Active)
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Text("View sync logs", style = MaterialTheme.typography.labelSmall, color = TextDisabled)
+                Text("→", style = MaterialTheme.typography.labelSmall, color = TextDisabled)
+            }
+        }
     }
 }
 

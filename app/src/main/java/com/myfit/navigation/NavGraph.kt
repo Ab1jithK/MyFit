@@ -24,6 +24,7 @@ import com.myfit.feature.nutrition.NutritionScreen
 import com.myfit.feature.planner.PlannerScreen
 import com.myfit.feature.onboarding.OnboardingScreen
 import com.myfit.feature.onboarding.OnboardingViewModel
+import com.myfit.feature.home.SyncLogScreen
 import com.myfit.feature.training.ActiveWorkoutScreen
 
 private data class BottomNavItem(val screen: Screen, val icon: ImageVector, val label: String)
@@ -123,6 +124,10 @@ fun NavGraph() {
 
             composable(Screen.Planner.route) {
                 PlannerScreen()
+            }
+
+            composable(Screen.SyncLog.route) {
+                SyncLogScreen(onBack = { navController.popBackStack() })
             }
 
             composable(

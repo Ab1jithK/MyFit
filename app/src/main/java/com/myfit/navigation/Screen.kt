@@ -9,5 +9,6 @@ sealed class Screen(val route: String) {
     }
     data object Nutrition  : Screen("nutrition")
     data object Planner    : Screen("planner")
+    data object SyncLog    : Screen("sync_log")
     data object Settings   : Screen("settings")
 }
