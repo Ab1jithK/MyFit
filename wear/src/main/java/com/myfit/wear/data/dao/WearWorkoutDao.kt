@@ -16,11 +16,17 @@ interface WearWorkoutDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExercises(exercises: List<ExerciseEntity>)
 
+    @Query("SELECT * FROM workout_sessions WHERE endedAt IS NULL LIMIT 1")
+    suspend fun getActiveSession(): WorkoutSessionEntity?
+
     @Query("SELECT * FROM workout_sessions ORDER BY startedAt DESC LIMIT 1")
     suspend fun getLastSession(): WorkoutSessionEntity?
 
     @Query("SELECT * FROM sets WHERE sessionId = :sessionId ORDER BY setNumber")
     suspend fun getSetsForSession(sessionId: String): List<SetEntity>
+
+    @Query("SELECT * FROM sets WHERE sessionId = :sessionId ORDER BY recordedAt ASC")
+    suspend fun getAllSetsForSession(sessionId: String): List<SetEntity>
 
     @Query("SELECT * FROM sets WHERE exerciseId = :exerciseId AND sessionId = :sessionId ORDER BY setNumber DESC LIMIT 3")
     suspend fun getLastSetsForExerciseInSession(exerciseId: String, sessionId: String): List<SetEntity>
@@ -36,4 +42,10 @@ interface WearWorkoutDao {
 
     @Query("UPDATE workout_sessions SET endedAt = :endedAt WHERE id = :id")
     suspend fun endSession(id: String, endedAt: Long)
+
+    @Query("UPDATE sets SET weightKg = :weightKg, reps = :reps WHERE id = :id")
+    suspend fun updateSet(id: String, weightKg: Float, reps: Int)
+
+    @Query("DELETE FROM sets WHERE id = :id")
+    suspend fun deleteSet(id: String)
 }

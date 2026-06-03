@@ -14,7 +14,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.*
+import androidx.navigation.navArgument
 import com.myfit.core.ui.theme.*
 import com.myfit.feature.analytics.AnalyticsScreen
 import com.myfit.feature.home.HomeScreen
@@ -123,7 +125,10 @@ fun NavGraph() {
                 PlannerScreen()
             }
 
-            composable(Screen.Training.route) {
+            composable(
+                route = Screen.Training.route,
+                arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
+            ) {
                 ActiveWorkoutScreen(
                     onFinish = {
                         navController.navigate(Screen.Home.route) {

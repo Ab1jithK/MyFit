@@ -23,8 +23,10 @@ fun HomeScreen(
     onStartWorkout: (sessionId: String) -> Unit,
     vm: HomeViewModel = hiltViewModel()
 ) {
-    val state     by vm.dashboardState.collectAsStateWithLifecycle()
-    val bleStatus by vm.bleSyncStatus.collectAsStateWithLifecycle()
+    val state          by vm.dashboardState.collectAsStateWithLifecycle()
+    val bleStatus      by vm.bleSyncStatus.collectAsStateWithLifecycle()
+    val watchConnected by vm.watchConnected.collectAsStateWithLifecycle()
+    val lastSyncLabel  by vm.lastSyncLabel.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         vm.navigateToTraining.collect { sessionId -> onStartWorkout(sessionId) }
@@ -32,12 +34,12 @@ fun HomeScreen(
 
     Scaffold(containerColor = Black, contentColor = TextPrimary) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            SyncStatusBar(bleStatus, vm.lastSyncLabel)
+            SyncStatusBar(bleStatus, lastSyncLabel)
             Box(modifier = Modifier.weight(1f)) {
                 when (val s = state) {
                     DashboardState.Idle              -> IdleView(vm::startWorkout)
                     is DashboardState.PreWorkout     -> PreWorkoutView(s, vm::startWorkout)
-                    is DashboardState.ActiveTraining -> ActiveView(s)
+                    is DashboardState.ActiveTraining -> ActiveView(s, watchConnected, onStartWorkout)
                     DashboardState.Analytical        -> AnalyticalView()
                 }
             }
@@ -144,16 +146,31 @@ private fun PreWorkoutView(state: DashboardState.PreWorkout, onStart: () -> Unit
 }
 
 @Composable
-private fun ActiveView(state: DashboardState.ActiveTraining) {
+private fun ActiveView(
+    state: DashboardState.ActiveTraining,
+    watchConnected: Boolean,
+    onResumeWorkout: (String) -> Unit
+) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             Text("SESSION ACTIVE", style = MaterialTheme.typography.displaySmall, color = Active)
-            Spacer(Modifier.height(8.dp))
             Text(
-                if (state.watchConnected) "WATCH CONNECTED" else "STANDALONE MODE",
+                if (watchConnected) "WATCH CONNECTED" else "STANDALONE MODE",
                 style = MaterialTheme.typography.labelLarge,
-                color = if (state.watchConnected) Performance else TextSecondary
+                color = if (watchConnected) Performance else TextSecondary
             )
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = { onResumeWorkout(state.sessionId) },
+                modifier = Modifier.fillMaxWidth(0.7f).height(64.dp),
+                shape = RoundedCornerShape(4.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Active)
+            ) {
+                Text("RESUME WORKOUT", style = MaterialTheme.typography.headlineMedium, color = Black)
+            }
         }
     }
 }

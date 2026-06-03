@@ -121,11 +121,31 @@ private fun SetRowContent(set: SetEntity) {
             style = MaterialTheme.typography.displaySmall,
             color = TextPrimary
         )
+        DeviceBadge(set.sourceDevice)
         Text(
             text = "#${set.setNumber}",
             style = MaterialTheme.typography.labelMedium,
             color = TextSecondary
         )
+    }
+}
+
+@Composable
+internal fun DeviceBadge(sourceDevice: String) {
+    val (label, color) = when (sourceDevice) {
+        "watch"  -> "⌚" to Active
+        "merged" -> "⇄" to Caution
+        else     -> null to TextSecondary
+    }
+    if (label != null) {
+        Box(
+            modifier = Modifier
+                .background(color.copy(alpha = 0.15f), RoundedCornerShape(3.dp))
+                .padding(horizontal = 5.dp, vertical = 2.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = color)
+        }
     }
 }
 

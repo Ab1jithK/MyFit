@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -41,19 +42,26 @@ class HomeViewModel @Inject constructor(
 
     val bleSyncStatus = bleManager.syncStatus
 
-    val lastSyncLabel: String
-        get() {
-            val prefs = context.getSharedPreferences("myfit_prefs", Context.MODE_PRIVATE)
-            val lastMs = prefs.getLong("last_sync_ms", 0L)
-            if (lastMs == 0L) return "Never synced"
-            val diff = System.currentTimeMillis() - lastMs
-            return when {
-                diff < 60_000          -> "Synced just now"
-                diff < 3_600_000       -> "Synced ${TimeUnit.MILLISECONDS.toMinutes(diff)}m ago"
-                diff < 86_400_000      -> "Synced ${TimeUnit.MILLISECONDS.toHours(diff)}h ago"
-                else                   -> "Synced ${TimeUnit.MILLISECONDS.toDays(diff)}d ago"
-            }
+    val watchConnected = bleManager.syncStatus
+        .map { it == PhoneSyncStatus.Done || it == PhoneSyncStatus.Syncing || it == PhoneSyncStatus.Connecting }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val lastSyncLabel = bleManager.syncStatus
+        .map { readSyncLabel() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), readSyncLabel())
+
+    private fun readSyncLabel(): String {
+        val prefs = context.getSharedPreferences("myfit_prefs", Context.MODE_PRIVATE)
+        val lastMs = prefs.getLong("last_sync_ms", 0L)
+        if (lastMs == 0L) return "Never synced"
+        val diff = System.currentTimeMillis() - lastMs
+        return when {
+            diff < 60_000     -> "Synced just now"
+            diff < 3_600_000  -> "Synced ${TimeUnit.MILLISECONDS.toMinutes(diff)}m ago"
+            diff < 86_400_000 -> "Synced ${TimeUnit.MILLISECONDS.toHours(diff)}h ago"
+            else              -> "Synced ${TimeUnit.MILLISECONDS.toDays(diff)}d ago"
         }
+    }
 
     fun startScan() = bleManager.startScanning()
 

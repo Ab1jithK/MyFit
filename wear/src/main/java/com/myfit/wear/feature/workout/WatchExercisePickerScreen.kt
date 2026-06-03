@@ -1,7 +1,11 @@
 package com.myfit.wear.feature.workout
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items as rowItems
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,7 +22,9 @@ import androidx.wear.compose.material.*
 
 private val Black       = Color(0xFF000000)
 private val Surface1    = Color(0xFF111111)
+private val Surface2    = Color(0xFF1A1A1A)
 private val Performance = Color(0xFF00FF87)
+private val Active      = Color(0xFF00B4FF)
 private val TextPrimary = Color(0xFFEEEEEE)
 private val TextMuted   = Color(0xFF888888)
 
@@ -52,7 +58,34 @@ fun WatchExercisePickerScreen(
                     letterSpacing = 2.sp
                 )
             }
-            item { Text("Swipe right to go back", color = TextMuted, fontSize = 9.sp) }
+
+            // Muscle-group filter chips
+            item {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    contentPadding        = PaddingValues(horizontal = 4.dp)
+                ) {
+                    rowItems(WATCH_FILTERS) { cat ->
+                        val selected = cat == state.exerciseFilter
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    if (selected) Active.copy(alpha = 0.25f) else Surface2,
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .clickable { vm.setExerciseFilter(cat) }
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Text(
+                                cat,
+                                fontSize   = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color      = if (selected) Active else TextMuted
+                            )
+                        }
+                    }
+                }
+            }
 
             items(state.exercises) { exercise ->
                 Chip(
