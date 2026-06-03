@@ -27,12 +27,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import android.view.ViewGroup
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myfit.core.ui.theme.*
@@ -414,6 +408,7 @@ private fun TemplateCard(twx: TemplateWithExercises, onEdit: () -> Unit, onDelet
 
 // ── Add template — 2-step fullscreen Dialog (no sheet physics) ───────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddTemplateSheet(
     dayLabel: String,
@@ -432,63 +427,45 @@ private fun AddTemplateSheet(
     var name by remember { mutableStateOf("") }
     val stagedExercises = remember(stagedIds, allExercises) { allExercises.filter { it.id in stagedIds } }
 
-    Dialog(
-        onDismissRequest = { if (step == 1 && stagedIds.isEmpty()) onDismiss() },
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    // skipPartiallyExpanded = always full height
+    // confirmValueChange prevents swipe-to-dismiss — only X button or back dismiss
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange    = { it != SheetValue.Hidden }
+    )
+
+    ModalBottomSheet(
+        onDismissRequest  = { if (step == 1 && stagedIds.isEmpty()) onDismiss() },
+        sheetState        = sheetState,
+        containerColor    = Surface1,
+        dragHandle        = null,       // no visible drag affordance
+        modifier          = Modifier.fillMaxHeight(0.93f)
     ) {
-        // Force Dialog window to MATCH_PARENT — without this maxHeight is unconstrained
-        val dialogView = LocalView.current
-        SideEffect {
-            (dialogView.parent as? DialogWindowProvider)?.window
-                ?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        }
-
-        // systemBarsPadding ensures maxHeight = true safe-area height
-        BoxWithConstraints(
-            modifier = Modifier.fillMaxSize().systemBarsPadding()
-        ) {
-            val panelHeight = maxHeight - 64.dp   // 64dp scrim gap at top
-
-            // Scrim
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Black.copy(alpha = 0.65f))
-                    .clickable { if (step == 1 && stagedIds.isEmpty()) onDismiss() }
-            )
-
-            // Panel: exact bounded height — weight(1f) resolves correctly
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(panelHeight)
-                    .background(Surface1, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-            ) {
-                if (step == 1) {
-                    StepOnePickExercises(
-                        dayLabel       = dayLabel,
-                        searchQuery    = searchQuery,
-                        searchFilter   = searchFilter,
-                        searchResults  = searchResults,
-                        stagedIds      = stagedIds,
-                        stagedExercises = stagedExercises,
-                        onSearchChange = onSearchChange,
-                        onFilterChange = onFilterChange,
-                        onToggleStage  = onToggleStage,
-                        onNext         = { step = 2 },
-                        onCancel       = onDismiss
-                    )
-                } else {
-                    StepTwoNameWorkout(
-                        dayLabel        = dayLabel,
-                        stagedExercises = stagedExercises,
-                        name            = name,
-                        onNameChange    = { name = it },
-                        onBack          = { step = 1 },
-                        onConfirm       = { onSave(name.ifBlank { "$dayLabel WORKOUT" }) }
-                    )
-                }
+        // ModalBottomSheet handles insets correctly — no manual inset math needed
+        Column(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
+            if (step == 1) {
+                StepOnePickExercises(
+                    dayLabel        = dayLabel,
+                    searchQuery     = searchQuery,
+                    searchFilter    = searchFilter,
+                    searchResults   = searchResults,
+                    stagedIds       = stagedIds,
+                    stagedExercises = stagedExercises,
+                    onSearchChange  = onSearchChange,
+                    onFilterChange  = onFilterChange,
+                    onToggleStage   = onToggleStage,
+                    onNext          = { step = 2 },
+                    onCancel        = onDismiss
+                )
+            } else {
+                StepTwoNameWorkout(
+                    dayLabel        = dayLabel,
+                    stagedExercises = stagedExercises,
+                    name            = name,
+                    onNameChange    = { name = it },
+                    onBack          = { step = 1 },
+                    onConfirm       = { onSave(name.ifBlank { "$dayLabel WORKOUT" }) }
+                )
             }
         }
     }
