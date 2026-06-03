@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myfit.core.ui.theme.*
@@ -432,9 +433,10 @@ private fun AddTemplateSheet(
         onDismissRequest = { if (step == 1 && stagedIds.isEmpty()) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        // Without decorFitsSystemWindows=false the Dialog window is already
-        // constrained to the safe area — fillMaxSize() == usable screen space only
-        Box(modifier = Modifier.fillMaxSize()) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val scrimGap  = 72.dp
+            val panelHeight = maxHeight - scrimGap   // actual px-correct height
+
             // Scrim
             Box(
                 modifier = Modifier
@@ -443,13 +445,12 @@ private fun AddTemplateSheet(
                     .clickable { if (step == 1 && stagedIds.isEmpty()) onDismiss() }
             )
 
-            // Panel anchored to bottom — no inset handling needed, Dialog handles it
+            // Panel: explicit height derived from real constraint — weight(1f) works correctly
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .fillMaxHeight()
-                    .padding(top = 72.dp)
+                    .height(panelHeight)
                     .background(Surface1, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
             ) {
                 if (step == 1) {
