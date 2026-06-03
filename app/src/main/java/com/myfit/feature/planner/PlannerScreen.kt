@@ -27,8 +27,11 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import android.view.ViewGroup
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -433,9 +436,18 @@ private fun AddTemplateSheet(
         onDismissRequest = { if (step == 1 && stagedIds.isEmpty()) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val scrimGap  = 72.dp
-            val panelHeight = maxHeight - scrimGap   // actual px-correct height
+        // Force Dialog window to MATCH_PARENT — without this maxHeight is unconstrained
+        val dialogView = LocalView.current
+        SideEffect {
+            (dialogView.parent as? DialogWindowProvider)?.window
+                ?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        }
+
+        // systemBarsPadding ensures maxHeight = true safe-area height
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize().systemBarsPadding()
+        ) {
+            val panelHeight = maxHeight - 64.dp   // 64dp scrim gap at top
 
             // Scrim
             Box(
@@ -445,7 +457,7 @@ private fun AddTemplateSheet(
                     .clickable { if (step == 1 && stagedIds.isEmpty()) onDismiss() }
             )
 
-            // Panel: explicit height derived from real constraint — weight(1f) works correctly
+            // Panel: exact bounded height — weight(1f) resolves correctly
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
