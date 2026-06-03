@@ -12,7 +12,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -47,6 +51,27 @@ data class WatchWorkoutUiState(
     val editActiveInput: NumpadTarget = NumpadTarget.WEIGHT
 )
 
+data class InputState(
+    val currentExercise: ExerciseEntity? = null,
+    val exercises: List<ExerciseEntity> = emptyList(),
+    val allExercises: List<ExerciseEntity> = emptyList(),
+    val exerciseFilter: String = "ALL",
+    val recentSets: List<SetEntity> = emptyList(),
+    val weightInput: String = "",
+    val repsInput: String = "",
+    val activeInput: NumpadTarget = NumpadTarget.WEIGHT,
+    val restSecondsLeft: Int = 0,
+    val setCount: Int = 0
+)
+
+data class LogState(
+    val sessionGroups: List<ExerciseSetGroup> = emptyList(),
+    val editingSet: SetEntity? = null,
+    val editWeightInput: String = "",
+    val editRepsInput: String = "",
+    val editActiveInput: NumpadTarget = NumpadTarget.WEIGHT
+)
+
 val WATCH_FILTERS = listOf("ALL","CHEST","BACK","SHOULDERS","LEGS","ARMS","CORE")
 
 @HiltViewModel
@@ -60,6 +85,31 @@ class WatchWorkoutViewModel @Inject constructor(
     private val _state = MutableStateFlow(WatchWorkoutUiState(sessionId = sessionId))
     val state = _state.asStateFlow()
     private var restTimerJob: Job? = null
+
+    val inputState: StateFlow<InputState> = _state.map { s ->
+        InputState(
+            currentExercise = s.currentExercise,
+            exercises       = s.exercises,
+            allExercises    = s.allExercises,
+            exerciseFilter  = s.exerciseFilter,
+            recentSets      = s.recentSets,
+            weightInput     = s.weightInput,
+            repsInput       = s.repsInput,
+            activeInput     = s.activeInput,
+            restSecondsLeft = s.restSecondsLeft,
+            setCount        = s.setCount
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), InputState())
+
+    val logState: StateFlow<LogState> = _state.map { s ->
+        LogState(
+            sessionGroups   = s.sessionGroups,
+            editingSet      = s.editingSet,
+            editWeightInput = s.editWeightInput,
+            editRepsInput   = s.editRepsInput,
+            editActiveInput = s.editActiveInput
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LogState())
 
     init {
         viewModelScope.launch {
