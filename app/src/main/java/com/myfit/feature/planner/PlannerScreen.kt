@@ -442,14 +442,16 @@ private fun AddTemplateSheet(
                     .clickable { if (step == 1 && stagedIds.isEmpty()) onDismiss() }
             )
 
-            // Panel: fillMaxHeight inside a bounded Box works; padding(top) leaves scrim visible
+            // Panel: background applied before navigationBarsPadding so Surface1
+            // fills behind nav bar, but content (weight items + buttons) stops above it
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .fillMaxHeight()
-                    .padding(top = 72.dp)   // scrim gap at top
+                    .padding(top = 72.dp)
                     .background(Surface1, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                    .navigationBarsPadding()
             ) {
                 if (step == 1) {
                     StepOnePickExercises(
@@ -526,7 +528,7 @@ private fun ColumnScope.StepOnePickExercises(
 
     // Pinned bottom
     HorizontalDivider(color = Border)
-    Column(modifier = Modifier.navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 16.dp)) {
+    Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 16.dp)) {
         if (stagedIds.isNotEmpty()) {
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -635,7 +637,7 @@ private fun ColumnScope.StepTwoNameWorkout(
 
     // Pinned ADD button — ALWAYS visible at bottom
     HorizontalDivider(color = Border)
-    Column(modifier = Modifier.navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp)) {
+    Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp)) {
         Button(
             onClick  = onConfirm,
             modifier = Modifier.fillMaxWidth().height(60.dp),
