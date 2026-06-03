@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Barbell icon — viewport 108x108 (Android adaptive icon standard)
+  Safe zone: 18–90 on each axis. All shapes stay within 20–88.
+  Color: #00FF87 (MyFit Performance green) on transparent.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group android:translateX="0" android:translateY="0">
+
+        <!-- Central bar -->
+        <path
+            android:fillColor="#00FF87"
+            android:pathData="M28,51 L80,51 L80,57 L28,57 Z" />
+
+        <!-- Left collar -->
+        <path
+            android:fillColor="#00FF87"
+            android:pathData="M24,44 L28,44 L28,64 L24,64 Z" />
+
+        <!-- Left outer plate (rounded ends) -->
+        <path
+            android:fillColor="#00FF87"
+            android:pathData="M20,38
+                              L24,38
+                              L24,70
+                              L20,70
+                              Z" />
+
+        <!-- Right collar -->
+        <path
+            android:fillColor="#00FF87"
+            android:pathData="M80,44 L84,44 L84,64 L80,64 Z" />
+
+        <!-- Right outer plate -->
+        <path
+            android:fillColor="#00FF87"
+            android:pathData="M84,38
+                              L88,38
+                              L88,70
+                              L84,70
+                              Z" />
+
+        <!-- Small MF monogram on bar — dot above + below center -->
+        <path
+            android:fillColor="#000000"
+            android:pathData="M51,51 L51,57 L57,57 L57,51 Z" />
+
+    </group>
+</vector>
