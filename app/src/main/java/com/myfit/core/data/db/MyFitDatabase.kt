@@ -18,9 +18,10 @@ import com.myfit.core.data.db.entity.*
         FoodItemEntity::class,
         NutritionLogEntity::class,
         QuickStackEntity::class,
-        SyncEventEntity::class
+        SyncEventEntity::class,
+        PlanOverrideEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class MyFitDatabase : RoomDatabase() {
@@ -30,4 +31,5 @@ abstract class MyFitDatabase : RoomDatabase() {
     abstract fun nutritionDao(): NutritionDao
     abstract fun cnsDao(): CnsDao
     abstract fun syncEventDao(): SyncEventDao
+    abstract fun planOverrideDao(): PlanOverrideDao
 }
