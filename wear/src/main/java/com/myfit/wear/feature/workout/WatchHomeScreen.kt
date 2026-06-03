@@ -51,6 +51,15 @@ fun WatchHomeScreen(
                     textAlign = TextAlign.Center
                 )
             }
+            if (syncStatus == SyncStatus.Idle || syncStatus == SyncStatus.Error) {
+                Spacer(Modifier.height(4.dp))
+                Chip(
+                    onClick  = vm::startAdvertising,
+                    label    = { Text("CONNECT", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    modifier = Modifier.fillMaxWidth(0.75f),
+                    colors   = ChipDefaults.chipColors(backgroundColor = Active, contentColor = Black)
+                )
+            }
             Spacer(Modifier.height(6.dp))
 
             Text(

@@ -23,7 +23,7 @@ import javax.inject.Inject
 @HiltViewModel
 class WatchHomeViewModel @Inject constructor(
     private val dao: WearWorkoutDao,
-    bleManager: WearBleManager,
+    private val bleManager: WearBleManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -72,6 +72,8 @@ class WatchHomeViewModel @Inject constructor(
             ) }
         }
     }
+
+    fun startAdvertising() = bleManager.startAdvertising()
 
     fun startWorkout(onReady: (String) -> Unit) {
         viewModelScope.launch {
