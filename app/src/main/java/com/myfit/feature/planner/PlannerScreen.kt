@@ -27,6 +27,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myfit.core.ui.theme.*
@@ -393,9 +395,8 @@ private fun TemplateCard(twx: TemplateWithExercises, onEdit: () -> Unit, onDelet
     }
 }
 
-// ── Add template sheet — 2-step flow ─────────────────────────────────────────
+// ── Add template — 2-step fullscreen Dialog (no sheet physics) ───────────────
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddTemplateSheet(
     dayLabel: String,
@@ -412,197 +413,231 @@ private fun AddTemplateSheet(
 ) {
     var step by remember { mutableIntStateOf(1) }
     var name by remember { mutableStateOf("") }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val stagedExercises = remember(stagedIds, allExercises) { allExercises.filter { it.id in stagedIds } }
 
-    val stagedExercises = remember(stagedIds, allExercises) {
-        allExercises.filter { it.id in stagedIds }
+    Dialog(
+        onDismissRequest = { if (step == 1 && stagedIds.isEmpty()) onDismiss() },
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        // Scrim + slide-up panel
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Scrim — tap outside cancels only when nothing staged
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Black.copy(alpha = 0.65f))
+                    .clickable { if (step == 1 && stagedIds.isEmpty()) onDismiss() }
+            )
+
+            // Panel anchored to bottom
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.92f)
+                    .background(Surface1, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                    .navigationBarsPadding()
+            ) {
+                if (step == 1) {
+                    StepOnePickExercises(
+                        dayLabel       = dayLabel,
+                        searchQuery    = searchQuery,
+                        searchFilter   = searchFilter,
+                        searchResults  = searchResults,
+                        stagedIds      = stagedIds,
+                        stagedExercises = stagedExercises,
+                        onSearchChange = onSearchChange,
+                        onFilterChange = onFilterChange,
+                        onToggleStage  = onToggleStage,
+                        onNext         = { step = 2 },
+                        onCancel       = onDismiss
+                    )
+                } else {
+                    StepTwoNameWorkout(
+                        dayLabel        = dayLabel,
+                        stagedExercises = stagedExercises,
+                        name            = name,
+                        onNameChange    = { name = it },
+                        onBack          = { step = 1 },
+                        onConfirm       = { onSave(name.ifBlank { "$dayLabel WORKOUT" }) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.StepOnePickExercises(
+    dayLabel: String,
+    searchQuery: String,
+    searchFilter: String,
+    searchResults: List<com.myfit.core.data.db.entity.ExerciseEntity>,
+    stagedIds: Set<String>,
+    stagedExercises: List<com.myfit.core.data.db.entity.ExerciseEntity>,
+    onSearchChange: (String) -> Unit,
+    onFilterChange: (String) -> Unit,
+    onToggleStage: (com.myfit.core.data.db.entity.ExerciseEntity) -> Unit,
+    onNext: () -> Unit,
+    onCancel: () -> Unit
+) {
+    // Top bar (drag target hint)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment     = Alignment.CenterVertically
+    ) {
+        Column {
+            Text("ADD TO $dayLabel", style = MaterialTheme.typography.labelSmall, color = Active)
+            Text("Pick exercises", style = MaterialTheme.typography.headlineMedium, color = TextPrimary)
+        }
+        IconButton(onClick = onCancel) {
+            Icon(Icons.Default.Close, contentDescription = "Cancel", tint = TextSecondary)
+        }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = { if (stagedIds.isEmpty()) onDismiss() },
-        sheetState     = sheetState,
-        containerColor = Surface1,
-        dragHandle     = null
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.92f)
-                .navigationBarsPadding()
-        ) {
-            if (step == 1) {
-                // ── STEP 1: Pick exercises ────────────────────────────────
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment     = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            "ADD TO $dayLabel",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Active
-                        )
-                        Text(
-                            "Step 1 — Pick exercises",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = TextPrimary
-                        )
-                    }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Cancel", tint = TextSecondary)
-                    }
-                }
+    // Search + chips (fixed)
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        ExercisePickerHeader(searchQuery, searchFilter, onSearchChange, onFilterChange)
+    }
+    Spacer(Modifier.height(4.dp))
 
-                // Search + filter chips (fixed)
-                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    ExercisePickerHeader(searchQuery, searchFilter, onSearchChange, onFilterChange)
-                }
-                Spacer(Modifier.height(4.dp))
+    // Scrollable list
+    LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
+        items(searchResults) { ex ->
+            ExercisePickerRow(ex, isAdded = false, isStaged = ex.id in stagedIds, onToggle = { onToggleStage(ex) })
+        }
+    }
 
-                // Exercise list (scrollable, fills space)
-                LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
-                    items(searchResults) { ex ->
-                        ExercisePickerRow(
-                            ex       = ex,
-                            isAdded  = false,
-                            isStaged = ex.id in stagedIds,
-                            onToggle = { onToggleStage(ex) }
-                        )
-                    }
-                }
-
-                // Pinned bottom — NEXT button
-                HorizontalDivider(color = Border)
-                Column(modifier = Modifier.padding(16.dp)) {
-                    if (stagedIds.isNotEmpty()) {
-                        // Selected pills preview
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.padding(bottom = 10.dp)
-                        ) {
-                            items(stagedExercises) { ex ->
-                                Box(
-                                    modifier = Modifier
-                                        .background(Active.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
-                                        .border(1.dp, Active.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
-                                        .padding(horizontal = 10.dp, vertical = 5.dp)
-                                ) {
-                                    Text(ex.name, style = MaterialTheme.typography.labelSmall, color = Active)
-                                }
-                            }
-                        }
-                    }
-                    Button(
-                        onClick  = {
-                            name = if (stagedExercises.isNotEmpty()) "" else ""
-                            step = 2
-                        },
-                        enabled  = stagedIds.isNotEmpty(),
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
-                        shape    = RoundedCornerShape(4.dp),
-                        colors   = ButtonDefaults.buttonColors(
-                            containerColor         = Active,
-                            disabledContainerColor = Surface2
-                        )
+    // Pinned bottom
+    HorizontalDivider(color = Border)
+    Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 16.dp)) {
+        if (stagedIds.isNotEmpty()) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(bottom = 10.dp)
+            ) {
+                items(stagedExercises) { ex ->
+                    Box(
+                        modifier = Modifier
+                            .background(Active.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
+                            .border(1.dp, Active.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
-                        if (stagedIds.isEmpty()) {
-                            Text("SELECT AT LEAST 1 EXERCISE", style = MaterialTheme.typography.labelLarge, color = TextDisabled)
-                        } else {
-                            Text(
-                                "NEXT — NAME THIS WORKOUT  →",
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = Black
-                            )
-                        }
-                    }
-                }
-
-            } else {
-                // ── STEP 2: Name + confirm ────────────────────────────────
-                // Header with back
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = { step = 1 }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextSecondary)
-                    }
-                    Column {
-                        Text("ADD TO $dayLabel", style = MaterialTheme.typography.labelSmall, color = Active)
-                        Text("Step 2 — Name it", style = MaterialTheme.typography.headlineMedium, color = TextPrimary)
-                    }
-                }
-
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 20.dp)
-                        .padding(top = 8.dp)
-                ) {
-                    // Selected exercises summary
-                    Text("${stagedIds.size} EXERCISE${if (stagedIds.size != 1) "S" else ""} SELECTED", style = MaterialTheme.typography.labelSmall, color = TextDisabled)
-                    Spacer(Modifier.height(8.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        items(stagedExercises) { ex ->
-                            Column(
-                                modifier = Modifier
-                                    .background(Surface2, RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(ex.name.uppercase(), style = MaterialTheme.typography.labelSmall, color = TextPrimary)
-                                Text(ex.primaryMuscle.uppercase(), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(24.dp))
-                    Text("WORKOUT NAME", style = MaterialTheme.typography.labelSmall, color = TextDisabled)
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value         = name,
-                        onValueChange = { name = it },
-                        placeholder   = { Text("e.g. PUSH A, LEG DAY, UPPER", color = TextDisabled) },
-                        modifier      = Modifier.fillMaxWidth(),
-                        singleLine    = true,
-                        shape         = RoundedCornerShape(4.dp),
-                        colors        = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor  = Performance,
-                            unfocusedBorderColor = Border,
-                            focusedTextColor    = TextPrimary,
-                            unfocusedTextColor  = TextPrimary,
-                            cursorColor         = Performance
-                        )
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "You can rename this later from the day plan",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextDisabled
-                    )
-                }
-
-                // Pinned ADD TO DAY button
-                HorizontalDivider(color = Border)
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Button(
-                        onClick  = { onSave(name.ifBlank { "$dayLabel WORKOUT" }) },
-                        modifier = Modifier.fillMaxWidth().height(60.dp),
-                        shape    = RoundedCornerShape(4.dp),
-                        colors   = ButtonDefaults.buttonColors(containerColor = Performance)
-                    ) {
-                        Icon(Icons.Default.Check, contentDescription = null, tint = Black)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "ADD TO $dayLabel${if (name.isNotBlank()) " — ${name.uppercase()}" else ""}",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = Black
-                        )
+                        Text(ex.name, style = MaterialTheme.typography.labelSmall, color = Active)
                     }
                 }
             }
+        }
+        Button(
+            onClick  = onNext,
+            enabled  = stagedIds.isNotEmpty(),
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape    = RoundedCornerShape(4.dp),
+            colors   = ButtonDefaults.buttonColors(
+                containerColor         = Active,
+                disabledContainerColor = Surface2
+            )
+        ) {
+            Text(
+                if (stagedIds.isEmpty()) "SELECT EXERCISES ABOVE"
+                else "NEXT — NAME WORKOUT (${stagedIds.size} selected)  →",
+                style = MaterialTheme.typography.headlineSmall,
+                color = if (stagedIds.isNotEmpty()) Black else TextDisabled
+            )
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.StepTwoNameWorkout(
+    dayLabel: String,
+    stagedExercises: List<com.myfit.core.data.db.entity.ExerciseEntity>,
+    name: String,
+    onNameChange: (String) -> Unit,
+    onBack: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    // Top bar with back
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextSecondary)
+        }
+        Column {
+            Text("ADD TO $dayLabel", style = MaterialTheme.typography.labelSmall, color = Active)
+            Text("Name this workout", style = MaterialTheme.typography.headlineMedium, color = TextPrimary)
+        }
+    }
+
+    // Content (scrollable if needed, fills space)
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .padding(horizontal = 20.dp)
+            .padding(top = 8.dp, bottom = 8.dp)
+    ) {
+        Text(
+            "${stagedExercises.size} EXERCISE${if (stagedExercises.size != 1) "S" else ""} SELECTED",
+            style = MaterialTheme.typography.labelSmall,
+            color = TextDisabled
+        )
+        Spacer(Modifier.height(8.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(stagedExercises) { ex ->
+                Column(
+                    modifier = Modifier
+                        .background(Surface2, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(ex.name.uppercase(), style = MaterialTheme.typography.labelSmall, color = TextPrimary)
+                    Text(ex.primaryMuscle.uppercase(), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+        Text("WORKOUT NAME", style = MaterialTheme.typography.labelSmall, color = TextDisabled)
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value         = name,
+            onValueChange = onNameChange,
+            placeholder   = { Text("e.g. PUSH A, LEG DAY, UPPER", color = TextDisabled) },
+            modifier      = Modifier.fillMaxWidth(),
+            singleLine    = true,
+            shape         = RoundedCornerShape(4.dp),
+            colors        = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor   = Performance, unfocusedBorderColor = Border,
+                focusedTextColor     = TextPrimary, unfocusedTextColor = TextPrimary,
+                cursorColor          = Performance
+            )
+        )
+        Spacer(Modifier.height(6.dp))
+        Text("Leave blank to auto-name", style = MaterialTheme.typography.labelSmall, color = TextDisabled)
+    }
+
+    // Pinned ADD button — ALWAYS visible at bottom
+    HorizontalDivider(color = Border)
+    Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp)) {
+        Button(
+            onClick  = onConfirm,
+            modifier = Modifier.fillMaxWidth().height(60.dp),
+            shape    = RoundedCornerShape(4.dp),
+            colors   = ButtonDefaults.buttonColors(containerColor = Performance)
+        ) {
+            Icon(Icons.Default.Check, contentDescription = null, tint = Black)
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "ADD TO $dayLabel${if (name.isNotBlank()) "  —  ${name.uppercase()}" else ""}",
+                style    = MaterialTheme.typography.headlineSmall,
+                color    = Black,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
