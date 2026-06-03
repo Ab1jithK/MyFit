@@ -16,7 +16,7 @@ class WearSyncService : Service() {
     override fun onCreate() {
         super.onCreate()
         startForeground(NOTIF_ID, buildNotification())
-        bleManager.startAdvertising()
+        runCatching { bleManager.startAdvertising() }
     }
 
     override fun onDestroy() {

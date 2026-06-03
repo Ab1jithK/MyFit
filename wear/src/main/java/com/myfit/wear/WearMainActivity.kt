@@ -11,7 +11,9 @@ import dagger.hilt.android.AndroidEntryPoint
 class WearMainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        WearSyncService.start(this)
+        if (android.bluetooth.BluetoothAdapter.getDefaultAdapter() != null) {
+            WearSyncService.start(this)
+        }
         setContent { WearNavGraph() }
     }
 }
