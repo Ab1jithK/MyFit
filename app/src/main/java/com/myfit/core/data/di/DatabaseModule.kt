@@ -28,8 +28,13 @@ object DatabaseModule {
         val callback = object : RoomDatabase.Callback() {
             override fun onCreate(sqLiteDb: SupportSQLiteDatabase) {
                 CoroutineScope(Dispatchers.IO).launch {
-                    db?.exerciseDao()?.insertExercises(SeedExercises.all)
                     db?.nutritionDao()?.insertFoodItems(SeedFoods.all)
+                }
+            }
+            // onOpen upserts exercises so new entries appear on existing installs
+            override fun onOpen(sqLiteDb: SupportSQLiteDatabase) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    db?.exerciseDao()?.insertExercises(SeedExercises.all)
                 }
             }
         }

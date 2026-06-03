@@ -2,6 +2,9 @@ package com.myfit.feature.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.content.SharedPreferences
+import com.myfit.ble.PhoneBleManager
+import com.myfit.ble.PhoneSyncStatus
 import com.myfit.core.data.db.dao.CnsDao
 import com.myfit.core.data.db.dao.ExerciseDao
 import com.myfit.core.data.db.dao.SetDao
@@ -11,6 +14,8 @@ import com.myfit.core.domain.AiBriefingGenerator
 import com.myfit.core.domain.CnsEngine
 import com.myfit.core.domain.PrehabLibrary
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
@@ -18,6 +23,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 private const val MS_PER_DAY = 86_400_000L
@@ -28,8 +34,28 @@ class HomeViewModel @Inject constructor(
     private val setDao: SetDao,
     private val exerciseDao: ExerciseDao,
     private val cnsDao: CnsDao,
-    private val repo: WorkoutRepository
+    private val repo: WorkoutRepository,
+    private val bleManager: PhoneBleManager,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
+
+    val bleSyncStatus = bleManager.syncStatus
+
+    val lastSyncLabel: String
+        get() {
+            val prefs = context.getSharedPreferences("myfit_prefs", Context.MODE_PRIVATE)
+            val lastMs = prefs.getLong("last_sync_ms", 0L)
+            if (lastMs == 0L) return "Never synced"
+            val diff = System.currentTimeMillis() - lastMs
+            return when {
+                diff < 60_000          -> "Synced just now"
+                diff < 3_600_000       -> "Synced ${TimeUnit.MILLISECONDS.toMinutes(diff)}m ago"
+                diff < 86_400_000      -> "Synced ${TimeUnit.MILLISECONDS.toHours(diff)}h ago"
+                else                   -> "Synced ${TimeUnit.MILLISECONDS.toDays(diff)}d ago"
+            }
+        }
+
+    fun startScan() = bleManager.startScanning()
 
     private val _navigateToTraining = MutableSharedFlow<String>()
     val navigateToTraining = _navigateToTraining.asSharedFlow()

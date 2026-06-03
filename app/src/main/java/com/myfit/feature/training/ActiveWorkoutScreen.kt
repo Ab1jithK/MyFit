@@ -30,11 +30,13 @@ fun ActiveWorkoutScreen(
 
     if (state.showExercisePicker) {
         ExercisePickerSheet(
-            query = state.exercisePickerQuery,
-            results = state.exerciseSearchResults,
-            onQueryChange = vm::searchExercises,
-            onSelect = vm::selectExercise,
-            onDismiss = vm::dismissExercisePicker
+            query          = state.exercisePickerQuery,
+            results        = state.exerciseSearchResults,
+            selectedFilter = state.exercisePickerFilter,
+            onQueryChange  = vm::searchExercises,
+            onFilterChange = vm::setExerciseFilter,
+            onSelect       = vm::selectExercise,
+            onDismiss      = vm::dismissExercisePicker
         )
     }
 

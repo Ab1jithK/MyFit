@@ -1,6 +1,8 @@
 package com.myfit.feature.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -10,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.myfit.ble.PhoneSyncStatus
 import com.myfit.core.ui.theme.*
 import com.myfit.feature.home.component.AiBriefingCard
 import com.myfit.feature.home.component.PrehabPlayer
@@ -20,21 +23,48 @@ fun HomeScreen(
     onStartWorkout: (sessionId: String) -> Unit,
     vm: HomeViewModel = hiltViewModel()
 ) {
-    val state by vm.dashboardState.collectAsStateWithLifecycle()
+    val state     by vm.dashboardState.collectAsStateWithLifecycle()
+    val bleStatus by vm.bleSyncStatus.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         vm.navigateToTraining.collect { sessionId -> onStartWorkout(sessionId) }
     }
 
     Scaffold(containerColor = Black, contentColor = TextPrimary) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when (val s = state) {
-                DashboardState.Idle              -> IdleView(vm::startWorkout)
-                is DashboardState.PreWorkout     -> PreWorkoutView(s, vm::startWorkout)
-                is DashboardState.ActiveTraining -> ActiveView(s)
-                DashboardState.Analytical        -> AnalyticalView()
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            SyncStatusBar(bleStatus, vm.lastSyncLabel)
+            Box(modifier = Modifier.weight(1f)) {
+                when (val s = state) {
+                    DashboardState.Idle              -> IdleView(vm::startWorkout)
+                    is DashboardState.PreWorkout     -> PreWorkoutView(s, vm::startWorkout)
+                    is DashboardState.ActiveTraining -> ActiveView(s)
+                    DashboardState.Analytical        -> AnalyticalView()
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun SyncStatusBar(status: PhoneSyncStatus, lastSync: String) {
+    val (dotColor, label) = when (status) {
+        PhoneSyncStatus.Done       -> Performance to lastSync
+        PhoneSyncStatus.Syncing    -> Active      to "Syncing…"
+        PhoneSyncStatus.Connecting -> Caution     to "Connecting…"
+        PhoneSyncStatus.Scanning   -> Caution     to "Scanning for watch…"
+        PhoneSyncStatus.Error      -> Warning     to "Sync error"
+        PhoneSyncStatus.Idle       -> TextDisabled to lastSync
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Surface1)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(Modifier.size(8.dp).background(dotColor, CircleShape))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
     }
 }
 

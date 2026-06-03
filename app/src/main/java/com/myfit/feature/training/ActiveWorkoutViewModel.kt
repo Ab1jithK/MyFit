@@ -112,21 +112,40 @@ class ActiveWorkoutViewModel @Inject constructor(
 
     fun showExercisePicker() {
         viewModelScope.launch {
-            val results = repo.searchExercises("")
-            _state.update { it.copy(showExercisePicker = true, exerciseSearchResults = results) }
+            val all = repo.searchExercises("")
+            _state.update { it.copy(showExercisePicker = true, allExercises = all, exerciseSearchResults = all, exercisePickerFilter = "ALL") }
         }
     }
 
     fun searchExercises(query: String) {
         _state.update { it.copy(exercisePickerQuery = query) }
         viewModelScope.launch {
-            val results = repo.searchExercises(query)
-            _state.update { it.copy(exerciseSearchResults = results) }
+            val all  = repo.searchExercises(query)
+            val results = applyFilter(all, _state.value.exercisePickerFilter)
+            _state.update { it.copy(allExercises = all, exerciseSearchResults = results) }
         }
     }
 
+    fun setExerciseFilter(category: String) {
+        val results = applyFilter(_state.value.allExercises, category)
+        _state.update { it.copy(exercisePickerFilter = category, exerciseSearchResults = results) }
+    }
+
+    private fun applyFilter(exercises: List<ExerciseEntity>, category: String): List<ExerciseEntity> {
+        val muscles = when (category) {
+            "CHEST"     -> setOf("chest")
+            "BACK"      -> setOf("lats", "rear_delt", "traps", "erectors")
+            "SHOULDERS" -> setOf("front_delt", "side_delt", "rear_delt")
+            "LEGS"      -> setOf("quadriceps", "hamstrings", "glutes", "calves", "adductors")
+            "ARMS"      -> setOf("biceps", "triceps", "brachialis")
+            "CORE"      -> setOf("core", "obliques")
+            else        -> emptySet()
+        }
+        return if (muscles.isEmpty()) exercises else exercises.filter { it.primaryMuscle in muscles }
+    }
+
     fun dismissExercisePicker() {
-        _state.update { it.copy(showExercisePicker = false, exercisePickerQuery = "") }
+        _state.update { it.copy(showExercisePicker = false, exercisePickerQuery = "", exercisePickerFilter = "ALL") }
     }
 
     fun selectExercise(exercise: ExerciseEntity) {

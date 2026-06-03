@@ -13,7 +13,9 @@ data class ActiveWorkoutUiState(
     val restState: RestState = RestState.Idle,
     val showExercisePicker: Boolean = false,
     val exercisePickerQuery: String = "",
+    val exercisePickerFilter: String = "ALL",
     val exerciseSearchResults: List<ExerciseEntity> = emptyList(),
+    val allExercises: List<ExerciseEntity> = emptyList(),
     val isFinishing: Boolean = false
 ) {
     val currentSlot: ExerciseSlot? get() = exerciseSlots.getOrNull(currentSlotIndex)
