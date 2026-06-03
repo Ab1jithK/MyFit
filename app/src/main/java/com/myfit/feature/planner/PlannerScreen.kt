@@ -106,10 +106,12 @@ fun PlannerScreen(vm: PlannerViewModel = hiltViewModel()) {
 
         HorizontalDivider(color = Border, thickness = 0.5.dp)
 
-        // ── Selected day content ──────────────────────────────────────────────
+        // ── Selected day toolbar ──────────────────────────────────────────────
         val selectedWeekDay = state.selectedWeekDay
+        val isRest          = selectedWeekDay?.isRestDay == true
+
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -119,39 +121,42 @@ fun PlannerScreen(vm: PlannerViewModel = hiltViewModel()) {
                     style = MaterialTheme.typography.labelLarge,
                     color = TextSecondary
                 )
-                if (selectedWeekDay?.isRestDay == true) {
-                    Text(
-                        "REST DAY${selectedWeekDay.restNote?.let { " — $it" } ?: ""}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Caution
-                    )
-                }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                // Rest day toggle
-                TextButton(
-                    onClick = { vm.toggleRestDay() },
-                    colors  = ButtonDefaults.textButtonColors(
-                        contentColor = if (selectedWeekDay?.isRestDay == true) Caution else TextSecondary
-                    )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Rest day chip — prominent toggle
+                Box(
+                    modifier = Modifier
+                        .background(
+                            if (isRest) Caution.copy(alpha = 0.18f) else Surface2,
+                            RoundedCornerShape(20.dp)
+                        )
+                        .border(1.dp, if (isRest) Caution else Border, RoundedCornerShape(20.dp))
+                        .clickable { vm.toggleRestDay() }
+                        .padding(horizontal = 14.dp, vertical = 7.dp)
                 ) {
                     Text(
-                        if (selectedWeekDay?.isRestDay == true) "CLEAR REST" else "REST DAY",
-                        style = MaterialTheme.typography.labelSmall
+                        if (isRest) "😴 REST DAY  ✕" else "😴 REST DAY",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isRest) Caution else TextSecondary
                     )
                 }
-                TextButton(
-                    onClick = vm::showAddTemplate,
-                    enabled = selectedWeekDay?.isRestDay != true
-                ) {
-                    Text("+ ADD", style = MaterialTheme.typography.labelMedium, color = Performance)
+                if (!isRest) {
+                    Box(
+                        modifier = Modifier
+                            .background(Performance.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
+                            .border(1.dp, Performance.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                            .clickable { vm.showAddTemplate() }
+                            .padding(horizontal = 14.dp, vertical = 7.dp)
+                    ) {
+                        Text("+ ADD", style = MaterialTheme.typography.labelMedium, color = Performance)
+                    }
                 }
             }
         }
 
         HorizontalDivider(color = Border, thickness = 0.5.dp)
 
-        if (selectedWeekDay?.isRestDay == true) {
+        if (isRest) {
             Box(
                 modifier = Modifier.fillMaxWidth().weight(1f).padding(32.dp),
                 contentAlignment = Alignment.Center
@@ -159,14 +164,14 @@ fun PlannerScreen(vm: PlannerViewModel = hiltViewModel()) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("😴", style = MaterialTheme.typography.displayMedium)
                     Spacer(Modifier.height(8.dp))
-                    Text("Rest day scheduled", style = MaterialTheme.typography.bodyMedium, color = TextDisabled)
+                    Text("Rest day", style = MaterialTheme.typography.bodyMedium, color = TextDisabled)
                     Spacer(Modifier.height(16.dp))
                     OutlinedButton(
                         onClick = { vm.toggleRestDay() },
                         shape   = RoundedCornerShape(4.dp),
-                        colors  = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary)
+                        colors  = ButtonDefaults.outlinedButtonColors(contentColor = Caution)
                     ) {
-                        Text("CLEAR REST DAY", style = MaterialTheme.typography.labelMedium)
+                        Text("REMOVE REST DAY", style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
@@ -181,7 +186,7 @@ fun PlannerScreen(vm: PlannerViewModel = hiltViewModel()) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextDisabled
                     )
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(20.dp))
                     Button(
                         onClick = vm::showAddTemplate,
                         shape   = RoundedCornerShape(4.dp),
@@ -190,6 +195,14 @@ fun PlannerScreen(vm: PlannerViewModel = hiltViewModel()) {
                         Icon(Icons.Default.Add, contentDescription = null, tint = Black)
                         Spacer(Modifier.width(8.dp))
                         Text("ADD WORKOUT", color = Black, style = MaterialTheme.typography.labelLarge)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = vm::toggleRestDay,
+                        shape   = RoundedCornerShape(4.dp),
+                        colors  = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary)
+                    ) {
+                        Text("😴  MARK AS REST DAY", style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }

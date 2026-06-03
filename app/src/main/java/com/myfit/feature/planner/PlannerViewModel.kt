@@ -133,13 +133,15 @@ class PlannerViewModel @Inject constructor(
     // ── Rest day override ─────────────────────────────────────────────────────
 
     fun toggleRestDay(note: String? = null) {
-        val day = _state.value.selectedWeekDay ?: return
+        val s    = _state.value
+        val date = s.weekStart.plusDays(s.selectedDayIndex.toLong())
+        val isCurrentlyRest = s.selectedWeekDay?.isRestDay == true
         viewModelScope.launch {
-            if (day.isRestDay) {
-                overrideDao.clearOverride(day.date.format(ISO))
+            if (isCurrentlyRest) {
+                overrideDao.clearOverride(date.format(ISO))
             } else {
                 overrideDao.setOverride(PlanOverrideEntity(
-                    date      = day.date.format(ISO),
+                    date      = date.format(ISO),
                     isRestDay = true,
                     note      = note
                 ))
