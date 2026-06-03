@@ -414,12 +414,12 @@ private fun AddTemplateSheet(
     var step by remember { mutableIntStateOf(1) }
     var name by remember { mutableStateOf("") }
     val stagedExercises = remember(stagedIds, allExercises) { allExercises.filter { it.id in stagedIds } }
+    val panelHeight = LocalConfiguration.current.screenHeightDp.dp * 0.92f
 
     Dialog(
         onDismissRequest = { if (step == 1 && stagedIds.isEmpty()) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
-        // Scrim + slide-up panel
         Box(modifier = Modifier.fillMaxSize()) {
             // Scrim — tap outside cancels only when nothing staged
             Box(
@@ -429,12 +429,12 @@ private fun AddTemplateSheet(
                     .clickable { if (step == 1 && stagedIds.isEmpty()) onDismiss() }
             )
 
-            // Panel anchored to bottom — no navigationBarsPadding here, applied per-section
+            // Panel: explicit height so weight(1f) on list gets a bounded constraint
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .fillMaxHeight(0.92f)
+                    .height(panelHeight)
                     .background(Surface1, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
             ) {
                 if (step == 1) {
