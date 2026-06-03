@@ -45,16 +45,17 @@ fun PlannerScreen(vm: PlannerViewModel = hiltViewModel()) {
     // Add template sheet
     if (state.showAddTemplate) {
         AddTemplateSheet(
-            dayLabel        = DAY_LABELS[state.selectedDayIndex],
-            searchQuery     = state.exercisePickerQuery,
-            searchFilter    = state.exercisePickerFilter,
-            searchResults   = state.exerciseSearchResults,
-            stagedIds       = state.stagedExerciseIds,
-            onSearchChange  = vm::searchExercises,
-            onFilterChange  = vm::setExerciseFilter,
-            onToggleStage   = vm::toggleStageExercise,
-            onSave          = vm::addTemplate,
-            onDismiss       = vm::hideAddTemplate
+            dayLabel       = DAY_LABELS[state.selectedDayIndex],
+            searchQuery    = state.exercisePickerQuery,
+            searchFilter   = state.exercisePickerFilter,
+            searchResults  = state.exerciseSearchResults,
+            allExercises   = state.allExercises,
+            stagedIds      = state.stagedExerciseIds,
+            onSearchChange = vm::searchExercises,
+            onFilterChange = vm::setExerciseFilter,
+            onToggleStage  = vm::toggleStageExercise,
+            onSave         = vm::addTemplate,
+            onDismiss      = vm::hideAddTemplate
         )
     }
 
@@ -392,7 +393,7 @@ private fun TemplateCard(twx: TemplateWithExercises, onEdit: () -> Unit, onDelet
     }
 }
 
-// ── Add template sheet (name + exercise picker in one flow) ───────────────────
+// ── Add template sheet — 2-step flow ─────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -401,6 +402,7 @@ private fun AddTemplateSheet(
     searchQuery: String,
     searchFilter: String,
     searchResults: List<com.myfit.core.data.db.entity.ExerciseEntity>,
+    allExercises: List<com.myfit.core.data.db.entity.ExerciseEntity>,
     stagedIds: Set<String>,
     onSearchChange: (String) -> Unit,
     onFilterChange: (String) -> Unit,
@@ -408,76 +410,197 @@ private fun AddTemplateSheet(
     onSave: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    var step by remember { mutableIntStateOf(1) }
     var name by remember { mutableStateOf("") }
-    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val stagedExercises = remember(stagedIds, allExercises) {
+        allExercises.filter { it.id in stagedIds }
+    }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor   = Surface1,
-        modifier         = Modifier.heightIn(min = screenHeight * 0.85f)
+        onDismissRequest = { if (stagedIds.isEmpty()) onDismiss() },
+        sheetState     = sheetState,
+        containerColor = Surface1,
+        dragHandle     = null
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight()
+                .fillMaxHeight(0.92f)
                 .navigationBarsPadding()
         ) {
-            // ── Fixed header ───────────────────────────────────────────────
-            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                Text("NEW WORKOUT — $dayLabel", style = MaterialTheme.typography.headlineLarge, color = TextPrimary)
-                Spacer(Modifier.height(4.dp))
-                Text("Name it, pick exercises, confirm", style = MaterialTheme.typography.labelSmall, color = TextDisabled)
-                Spacer(Modifier.height(16.dp))
-                OutlinedTextField(
-                    value         = name,
-                    onValueChange = { name = it },
-                    label         = { Text("Workout name (e.g. PUSH A)", color = TextDisabled, style = MaterialTheme.typography.labelSmall) },
-                    modifier      = Modifier.fillMaxWidth(),
-                    singleLine    = true,
-                    shape         = RoundedCornerShape(4.dp),
-                    colors        = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor  = Active, unfocusedBorderColor = Border,
-                        focusedTextColor    = TextPrimary, unfocusedTextColor = TextPrimary,
-                        cursorColor         = Active
-                    )
-                )
-                Spacer(Modifier.height(16.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("EXERCISES", style = MaterialTheme.typography.labelSmall, color = TextDisabled)
-                    if (stagedIds.isNotEmpty()) {
-                        Text("${stagedIds.size} selected", style = MaterialTheme.typography.labelSmall, color = Performance)
+            if (step == 1) {
+                // ── STEP 1: Pick exercises ────────────────────────────────
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment     = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            "ADD TO $dayLabel",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Active
+                        )
+                        Text(
+                            "Step 1 — Pick exercises",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = TextPrimary
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Cancel", tint = TextSecondary)
                     }
                 }
-                Spacer(Modifier.height(8.dp))
-                // Search + chips (fixed, not scrolling)
-                ExercisePickerHeader(searchQuery, searchFilter, onSearchChange, onFilterChange)
-                Spacer(Modifier.height(4.dp))
-            }
 
-            // ── Scrollable exercise list (fills remaining space) ───────────
-            LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 20.dp)) {
-                items(searchResults) { ex ->
-                    val isStaged = ex.id in stagedIds
-                    ExercisePickerRow(ex, isAdded = false, isStaged = isStaged, onToggle = { onToggleStage(ex) })
+                // Search + filter chips (fixed)
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    ExercisePickerHeader(searchQuery, searchFilter, onSearchChange, onFilterChange)
                 }
-            }
+                Spacer(Modifier.height(4.dp))
 
-            // ── Pinned confirm button ──────────────────────────────────────
-            HorizontalDivider(color = Border, thickness = 0.5.dp)
-            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
-                Button(
-                    onClick  = { if (name.isNotBlank()) onSave(name) },
-                    enabled  = name.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape    = RoundedCornerShape(4.dp),
-                    colors   = ButtonDefaults.buttonColors(containerColor = Performance)
+                // Exercise list (scrollable, fills space)
+                LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
+                    items(searchResults) { ex ->
+                        ExercisePickerRow(
+                            ex       = ex,
+                            isAdded  = false,
+                            isStaged = ex.id in stagedIds,
+                            onToggle = { onToggleStage(ex) }
+                        )
+                    }
+                }
+
+                // Pinned bottom — NEXT button
+                HorizontalDivider(color = Border)
+                Column(modifier = Modifier.padding(16.dp)) {
+                    if (stagedIds.isNotEmpty()) {
+                        // Selected pills preview
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(bottom = 10.dp)
+                        ) {
+                            items(stagedExercises) { ex ->
+                                Box(
+                                    modifier = Modifier
+                                        .background(Active.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
+                                        .border(1.dp, Active.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                ) {
+                                    Text(ex.name, style = MaterialTheme.typography.labelSmall, color = Active)
+                                }
+                            }
+                        }
+                    }
+                    Button(
+                        onClick  = {
+                            name = if (stagedExercises.isNotEmpty()) "" else ""
+                            step = 2
+                        },
+                        enabled  = stagedIds.isNotEmpty(),
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape    = RoundedCornerShape(4.dp),
+                        colors   = ButtonDefaults.buttonColors(
+                            containerColor         = Active,
+                            disabledContainerColor = Surface2
+                        )
+                    ) {
+                        if (stagedIds.isEmpty()) {
+                            Text("SELECT AT LEAST 1 EXERCISE", style = MaterialTheme.typography.labelLarge, color = TextDisabled)
+                        } else {
+                            Text(
+                                "NEXT — NAME THIS WORKOUT  →",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = Black
+                            )
+                        }
+                    }
+                }
+
+            } else {
+                // ── STEP 2: Name + confirm ────────────────────────────────
+                // Header with back
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        if (stagedIds.isEmpty()) "CREATE WORKOUT"
-                        else "CREATE WITH ${stagedIds.size} EXERCISE${if (stagedIds.size != 1) "S" else ""}",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = Black
+                    IconButton(onClick = { step = 1 }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextSecondary)
+                    }
+                    Column {
+                        Text("ADD TO $dayLabel", style = MaterialTheme.typography.labelSmall, color = Active)
+                        Text("Step 2 — Name it", style = MaterialTheme.typography.headlineMedium, color = TextPrimary)
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 8.dp)
+                ) {
+                    // Selected exercises summary
+                    Text("${stagedIds.size} EXERCISE${if (stagedIds.size != 1) "S" else ""} SELECTED", style = MaterialTheme.typography.labelSmall, color = TextDisabled)
+                    Spacer(Modifier.height(8.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(stagedExercises) { ex ->
+                            Column(
+                                modifier = Modifier
+                                    .background(Surface2, RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(ex.name.uppercase(), style = MaterialTheme.typography.labelSmall, color = TextPrimary)
+                                Text(ex.primaryMuscle.uppercase(), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(24.dp))
+                    Text("WORKOUT NAME", style = MaterialTheme.typography.labelSmall, color = TextDisabled)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value         = name,
+                        onValueChange = { name = it },
+                        placeholder   = { Text("e.g. PUSH A, LEG DAY, UPPER", color = TextDisabled) },
+                        modifier      = Modifier.fillMaxWidth(),
+                        singleLine    = true,
+                        shape         = RoundedCornerShape(4.dp),
+                        colors        = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor  = Performance,
+                            unfocusedBorderColor = Border,
+                            focusedTextColor    = TextPrimary,
+                            unfocusedTextColor  = TextPrimary,
+                            cursorColor         = Performance
+                        )
                     )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "You can rename this later from the day plan",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextDisabled
+                    )
+                }
+
+                // Pinned ADD TO DAY button
+                HorizontalDivider(color = Border)
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Button(
+                        onClick  = { onSave(name.ifBlank { "$dayLabel WORKOUT" }) },
+                        modifier = Modifier.fillMaxWidth().height(60.dp),
+                        shape    = RoundedCornerShape(4.dp),
+                        colors   = ButtonDefaults.buttonColors(containerColor = Performance)
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null, tint = Black)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "ADD TO $dayLabel${if (name.isNotBlank()) " — ${name.uppercase()}" else ""}",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = Black
+                        )
+                    }
                 }
             }
         }
