@@ -15,6 +15,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
+import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material.*
 
 private val Black       = Color(0xFF000000)
@@ -22,6 +24,7 @@ private val Surface1    = Color(0xFF111111)
 private val Surface2    = Color(0xFF1A1A1A)
 private val Performance = Color(0xFF00FF87)
 private val Active      = Color(0xFF00B4FF)
+private val Warning     = Color(0xFFFF4444)
 private val TextPrimary = Color(0xFFEEEEEE)
 private val TextMuted   = Color(0xFF888888)
 
@@ -32,131 +35,206 @@ fun WatchActiveWorkoutScreen(
     onFinish: () -> Unit,
     vm: WatchWorkoutViewModel = hiltViewModel()
 ) {
-    val state by vm.state.collectAsStateWithLifecycle()
+    val state    by vm.state.collectAsStateWithLifecycle()
+    val listState = rememberScalingLazyListState()
 
-    // Receive exercise selection from picker
-    val savedStateHandle = androidx.navigation.NavBackStackEntry::class
-    LaunchedEffect(Unit) { /* savedStateHandle observer wired in NavGraph */ }
-
-    Box(
-        modifier = Modifier.fillMaxSize().background(Black),
-        contentAlignment = Alignment.TopCenter
+    Scaffold(
+        modifier    = Modifier.background(Black),
+        timeText    = { TimeText() },
+        vignette    = { Vignette(vignettePosition = VignettePosition.TopAndBottom) },
+        positionIndicator = { PositionIndicator(scalingLazyListState = listState) }
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+        ScalingLazyColumn(
+            state          = listState,
+            modifier       = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(3.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Spacer(Modifier.height(6.dp))
-
-            // Exercise name — tap to change
-            Text(
-                text      = state.currentExercise?.name?.uppercase() ?: "SELECT EXERCISE",
-                color     = TextPrimary,
-                fontSize  = 11.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines  = 1,
-                overflow  = TextOverflow.Ellipsis,
-                modifier  = Modifier
-                    .fillMaxWidth()
-                    .background(Surface1, RoundedCornerShape(4.dp))
-                    .clickable(onClick = onPickExercise)
-                    .padding(horizontal = 8.dp, vertical = 5.dp),
-                textAlign = TextAlign.Center
-            )
+            // Exercise chip — tap to change
+            item {
+                Chip(
+                    onClick = onPickExercise,
+                    label   = {
+                        Text(
+                            state.currentExercise?.name?.uppercase() ?: "TAP TO SELECT",
+                            fontSize  = 12.sp,
+                            maxLines  = 1,
+                            overflow  = TextOverflow.Ellipsis,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    secondaryLabel = {
+                        Text("TAP TO CHANGE", fontSize = 9.sp, color = TextMuted)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors   = ChipDefaults.chipColors(
+                        backgroundColor    = Surface2,
+                        contentColor       = TextPrimary,
+                        secondaryContentColor = TextMuted
+                    )
+                )
+            }
 
             // Recent sets
-            state.recentSets.forEach { set ->
-                Text(
-                    "${set.weightKg}kg × ${set.reps}",
-                    color    = TextMuted,
-                    fontSize = 10.sp,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
-                )
+            if (state.recentSets.isNotEmpty()) {
+                item {
+                    Column(
+                        modifier            = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        state.recentSets.forEach { set ->
+                            Text(
+                                "Set ${set.setNumber}: ${set.weightKg}kg × ${set.reps}",
+                                color    = TextMuted,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
             }
 
-            Spacer(Modifier.height(2.dp))
-
-            // Input displays
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                InputCell(
-                    label    = "KG",
-                    value    = state.weightInput.ifEmpty { "—" },
-                    selected = state.activeInput == NumpadTarget.WEIGHT,
-                    onClick  = { vm.setActiveInput(NumpadTarget.WEIGHT) },
-                    modifier = Modifier.weight(1f)
-                )
-                InputCell(
-                    label    = "REPS",
-                    value    = state.repsInput.ifEmpty { "—" },
-                    selected = state.activeInput == NumpadTarget.REPS,
-                    onClick  = { vm.setActiveInput(NumpadTarget.REPS) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            // Numpad 4×3
-            val keys = listOf("7","8","9","4","5","6","1","2","3","0",".","⌫")
-            keys.chunked(3).forEach { row ->
+            // Weight + Reps inputs
+            item {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    modifier            = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    row.forEach { key ->
-                        Button(
-                            onClick  = { if (key == "⌫") vm.backspace() else vm.tapNumpad(key) },
-                            modifier = Modifier.weight(1f).height(30.dp),
-                            colors   = ButtonDefaults.buttonColors(backgroundColor = Surface2)
-                        ) {
-                            Text(key, color = TextPrimary, fontSize = 13.sp, textAlign = TextAlign.Center)
+                    InputCell(
+                        label    = "KG",
+                        value    = state.weightInput.ifEmpty { "—" },
+                        selected = state.activeInput == NumpadTarget.WEIGHT,
+                        onClick  = { vm.setActiveInput(NumpadTarget.WEIGHT) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    InputCell(
+                        label    = "REPS",
+                        value    = state.repsInput.ifEmpty { "—" },
+                        selected = state.activeInput == NumpadTarget.REPS,
+                        onClick  = { vm.setActiveInput(NumpadTarget.REPS) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // Numpad rows
+            val keys = listOf(
+                listOf("7","8","9"),
+                listOf("4","5","6"),
+                listOf("1","2","3"),
+                listOf(".","0","⌫")
+            )
+            keys.forEach { row ->
+                item {
+                    Row(
+                        modifier            = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        row.forEach { key ->
+                            Button(
+                                onClick  = { if (key == "⌫") vm.backspace() else vm.tapNumpad(key) },
+                                modifier = Modifier.weight(1f).height(40.dp),
+                                colors   = ButtonDefaults.buttonColors(backgroundColor = Surface2)
+                            ) {
+                                Text(
+                                    key,
+                                    color      = if (key == "⌫") Warning else TextPrimary,
+                                    fontSize   = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign  = TextAlign.Center
+                                )
+                            }
                         }
                     }
                 }
             }
 
             // LOG SET / rest timer
-            if (state.restSecondsLeft > 0) {
-                Button(
-                    onClick  = vm::dismissRestTimer,
-                    modifier = Modifier.fillMaxWidth().height(40.dp),
-                    colors   = ButtonDefaults.buttonColors(backgroundColor = Active)
-                ) {
-                    Text("REST ${state.restSecondsLeft}s", color = Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-            } else {
-                Button(
-                    onClick  = vm::logSet,
-                    modifier = Modifier.fillMaxWidth().height(40.dp),
-                    colors   = ButtonDefaults.buttonColors(backgroundColor = Performance)
-                ) {
-                    Text("LOG SET", color = Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            item {
+                if (state.restSecondsLeft > 0) {
+                    Button(
+                        onClick  = vm::dismissRestTimer,
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        colors   = ButtonDefaults.buttonColors(backgroundColor = Active)
+                    ) {
+                        Text(
+                            "REST  ${state.restSecondsLeft}s",
+                            color      = Black,
+                            fontSize   = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                } else {
+                    Button(
+                        onClick  = vm::logSet,
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        colors   = ButtonDefaults.buttonColors(backgroundColor = Performance)
+                    ) {
+                        Text(
+                            "LOG SET",
+                            color      = Black,
+                            fontSize   = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 
-            Chip(
-                onClick   = { vm.finishWorkout(onFinish) },
-                label     = { Text("FINISH", fontSize = 10.sp, color = TextMuted) },
-                modifier  = Modifier.fillMaxWidth(),
-                colors    = ChipDefaults.chipColors(backgroundColor = Surface1)
-            )
+            // Finish + back hint
+            item {
+                Row(
+                    modifier            = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Chip(
+                        onClick  = { vm.finishWorkout(onFinish) },
+                        label    = { Text("FINISH", fontSize = 11.sp) },
+                        modifier = Modifier.weight(1f),
+                        colors   = ChipDefaults.chipColors(backgroundColor = Surface1)
+                    )
+                    Chip(
+                        onClick  = onFinish,
+                        label    = { Text("← BACK", fontSize = 11.sp, color = TextMuted) },
+                        modifier = Modifier.weight(1f),
+                        colors   = ChipDefaults.chipColors(backgroundColor = Surface1)
+                    )
+                }
+            }
+
+            item { Spacer(Modifier.height(16.dp)) }
         }
     }
 }
 
 @Composable
-private fun InputCell(label: String, value: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
-    Column(
+private fun InputCell(
+    label: String, value: String, selected: Boolean,
+    onClick: () -> Unit, modifier: Modifier
+) {
+    Box(
         modifier = modifier
-            .background(if (selected) Active.copy(alpha = 0.2f) else Surface1, RoundedCornerShape(4.dp))
-            .clickable(onClick = onClick)
-            .padding(4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .height(52.dp)
+            .background(
+                if (selected) Active.copy(alpha = 0.25f) else Surface1,
+                RoundedCornerShape(8.dp)
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
     ) {
-        Text(label, color = TextMuted, fontSize = 8.sp)
-        Text(value, color = if (selected) Active else TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                label,
+                color    = if (selected) Active else TextMuted,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                value,
+                color      = if (selected) Active else TextPrimary,
+                fontSize   = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
