@@ -430,9 +430,10 @@ private fun AddTemplateSheet(
 
     Dialog(
         onDismissRequest = { if (step == 1 && stagedIds.isEmpty()) onDismiss() },
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        // fillMaxSize on the root gives every child a real bounded constraint
+        // Without decorFitsSystemWindows=false the Dialog window is already
+        // constrained to the safe area — fillMaxSize() == usable screen space only
         Box(modifier = Modifier.fillMaxSize()) {
             // Scrim
             Box(
@@ -442,8 +443,7 @@ private fun AddTemplateSheet(
                     .clickable { if (step == 1 && stagedIds.isEmpty()) onDismiss() }
             )
 
-            // Panel: background applied before navigationBarsPadding so Surface1
-            // fills behind nav bar, but content (weight items + buttons) stops above it
+            // Panel anchored to bottom — no inset handling needed, Dialog handles it
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -451,7 +451,6 @@ private fun AddTemplateSheet(
                     .fillMaxHeight()
                     .padding(top = 72.dp)
                     .background(Surface1, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                    .navigationBarsPadding()
             ) {
                 if (step == 1) {
                     StepOnePickExercises(
