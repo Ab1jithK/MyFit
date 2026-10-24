@@ -13,4 +13,8 @@ object BleConstants {
     const val CHUNK_SIZE    = 500
     const val PREFS_NAME    = "myfit_prefs"
     const val KEY_LAST_SYNC = "last_sync_ms"
+    const val KEY_WATCH_PAIRED = "watch_paired"
+
+    // Upper bound on a reassembled sync payload; anything larger is dropped
+    const val MAX_PAYLOAD_BYTES = 8 * 1024 * 1024
 }

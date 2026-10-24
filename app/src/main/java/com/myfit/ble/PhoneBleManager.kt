@@ -7,6 +7,7 @@ import android.content.SharedPreferences
 import com.myfit.core.data.db.dao.SetDao
 import com.myfit.core.data.db.dao.WorkoutDao
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -27,18 +28,34 @@ class PhoneBleManager @Inject constructor(
     private val setDao: SetDao,
     private val syncRepository: SyncRepository
 ) {
-    private val scope     = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val _syncStatus = MutableStateFlow(PhoneSyncStatus.Idle)
+    val syncStatus = _syncStatus.asStateFlow()
+
+    // A malformed payload from a peer must surface as a sync error, not crash the app
+    private val scope = CoroutineScope(
+        Dispatchers.IO + SupervisorJob() + CoroutineExceptionHandler { _, _ -> _syncStatus.value = PhoneSyncStatus.Error }
+    )
     private val btManager = context.getSystemService(BluetoothManager::class.java)
     private val btAdapter = btManager?.adapter
     private val prefs: SharedPreferences =
         context.getSharedPreferences(BleConstants.PREFS_NAME, Context.MODE_PRIVATE)
 
-    private val _syncStatus = MutableStateFlow(PhoneSyncStatus.Idle)
-    val syncStatus = _syncStatus.asStateFlow()
-
     private var activeGatt: BluetoothGatt? = null
-    private val incomingChunks = mutableListOf<ByteArray>()
-    private var expectedChunkCount = -1
+    private val assembler = ChunkAssembler()
+
+    private val hasPairedWatch get() = prefs.getBoolean(BleConstants.KEY_WATCH_PAIRED, false)
+
+    private fun isBonded(device: BluetoothDevice) = device.bondState == BluetoothDevice.BOND_BONDED
+
+    /** Lets the phone pair with a different watch on the next scan (unpair the old one in system settings too). */
+    fun forgetWatch() {
+        prefs.edit().remove(BleConstants.KEY_WATCH_PAIRED).apply()
+    }
+
+    private fun fail(gatt: BluetoothGatt) {
+        _syncStatus.value = PhoneSyncStatus.Error
+        gatt.disconnect()
+    }
 
     fun startScanning() {
         if (btAdapter?.isEnabled != true) return
@@ -57,6 +74,8 @@ class PhoneBleManager @Inject constructor(
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
+            // Once a watch is paired, ignore unknown advertisers rather than prompting to pair with them
+            if (hasPairedWatch && !isBonded(result.device)) return
             stopScanning()
             _syncStatus.value = PhoneSyncStatus.Connecting
             result.device.connectGatt(context, false, gattCallback)
@@ -70,6 +89,7 @@ class PhoneBleManager @Inject constructor(
                 gatt.requestMtu(512)
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 gatt.close(); activeGatt = null
+                assembler.reset()
                 if (_syncStatus.value == PhoneSyncStatus.Syncing) _syncStatus.value = PhoneSyncStatus.Done
             }
         }
@@ -79,19 +99,22 @@ class PhoneBleManager @Inject constructor(
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-            if (status != BluetoothGatt.GATT_SUCCESS) return
+            if (status != BluetoothGatt.GATT_SUCCESS) return fail(gatt)
             _syncStatus.value = PhoneSyncStatus.Syncing
-            val service  = gatt.getService(BleConstants.SERVICE_UUID) ?: return
-            val dataChar = service.getCharacteristic(BleConstants.SYNC_DATA_UUID)
+            val dataChar = gatt.getService(BleConstants.SERVICE_UUID)
+                ?.getCharacteristic(BleConstants.SYNC_DATA_UUID) ?: return fail(gatt)
+            val desc = dataChar.getDescriptor(BleConstants.CLIENT_CONFIG_UUID) ?: return fail(gatt)
             gatt.setCharacteristicNotification(dataChar, true)
-            val desc = dataChar.getDescriptor(BleConstants.CLIENT_CONFIG_UUID)
-            desc?.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            // The watch requires encryption here, so this write triggers the system pairing prompt on first sync
+            desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
             gatt.writeDescriptor(desc)
         }
 
         override fun onDescriptorWrite(
             gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int
         ) {
+            if (status != BluetoothGatt.GATT_SUCCESS || !isBonded(gatt.device)) return fail(gatt)
+            prefs.edit().putBoolean(BleConstants.KEY_WATCH_PAIRED, true).apply()
             val syncReq = gatt.getService(BleConstants.SERVICE_UUID)
                 ?.getCharacteristic(BleConstants.SYNC_REQUEST_UUID) ?: return
             gatt.readCharacteristic(syncReq)
@@ -111,32 +134,19 @@ class PhoneBleManager @Inject constructor(
         override fun onCharacteristicChanged(
             gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic
         ) {
-            if (characteristic.uuid == BleConstants.SYNC_DATA_UUID) {
+            if (characteristic.uuid == BleConstants.SYNC_DATA_UUID && isBonded(gatt.device)) {
                 handleIncomingChunk(characteristic.value)
             }
         }
     }
 
     private fun handleIncomingChunk(raw: ByteArray) {
-        val prefix = raw.copyOf(minOf(raw.size, 20)).toString(Charsets.UTF_8)
-        val sep1   = prefix.indexOf(':')
-        val sep2   = prefix.indexOf(':', sep1 + 1)
-        if (sep1 < 0 || sep2 < 0) return
-        val idx   = prefix.substring(0, sep1).toIntOrNull() ?: return
-        val total = prefix.substring(sep1 + 1, sep2).toIntOrNull() ?: return
-        val data  = raw.sliceArray((sep2 + 1) until raw.size)
-
-        if (idx == 0) { incomingChunks.clear(); expectedChunkCount = total }
-        incomingChunks.add(data)
-
-        if (incomingChunks.size == expectedChunkCount) {
-            val json = incomingChunks.fold(byteArrayOf()) { acc, b -> acc + b }.toString(Charsets.UTF_8)
-            scope.launch {
-                syncRepository.mergeIncoming(SyncPayload.deserialize(json))
-                sendAck(activeGatt ?: return@launch)
-                prefs.edit().putLong(BleConstants.KEY_LAST_SYNC, System.currentTimeMillis()).apply()
-                _syncStatus.value = PhoneSyncStatus.Done
-            }
+        val json = assembler.add(raw) ?: return
+        scope.launch {
+            syncRepository.mergeIncoming(SyncPayload.deserialize(json))
+            sendAck(activeGatt ?: return@launch)
+            prefs.edit().putLong(BleConstants.KEY_LAST_SYNC, System.currentTimeMillis()).apply()
+            _syncStatus.value = PhoneSyncStatus.Done
         }
     }
 

@@ -8,9 +8,12 @@ import com.myfit.wear.data.dao.WearSyncDao
 import com.myfit.wear.data.dao.WearWorkoutDao
 import com.myfit.wear.data.entity.SyncEventEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -27,73 +30,93 @@ class WearBleManager @Inject constructor(
     private val workoutDao: WearWorkoutDao,
     private val syncDao: WearSyncDao
 ) {
-    private val scope     = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val _syncStatus = MutableStateFlow(SyncStatus.Idle)
+    val syncStatus = _syncStatus.asStateFlow()
+
+    // A malformed payload from a peer must surface as a sync error, not crash the app
+    private val scope = CoroutineScope(
+        Dispatchers.IO + SupervisorJob() + CoroutineExceptionHandler { _, _ -> _syncStatus.value = SyncStatus.Error }
+    )
     private val btManager = context.getSystemService(BluetoothManager::class.java)
     private val btAdapter = btManager?.adapter
     private val prefs: SharedPreferences =
         context.getSharedPreferences(BleConstants.PREFS_NAME, Context.MODE_PRIVATE)
 
-    private val _syncStatus = MutableStateFlow(SyncStatus.Idle)
-    val syncStatus = _syncStatus.asStateFlow()
-
     private var gattServer: BluetoothGattServer? = null
-    private val incomingChunks = mutableListOf<ByteArray>()
-    private var expectedChunkCount = -1
+    private val assembler = ChunkAssembler()
+    private var advertiseWindow: Job? = null
 
     fun startAdvertising() {
         if (btAdapter?.isEnabled != true) return
-        setupGattServer()
+        if (gattServer == null) setupGattServer()
         val advertiser = btAdapter.bluetoothLeAdvertiser ?: return
         val settings = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_POWER)
-            .setConnectable(true).setTimeout(0).build()
+            .setConnectable(true).setTimeout(BleConstants.ADVERTISE_WINDOW_MS).build()
         val data = AdvertiseData.Builder()
             .addServiceUuid(android.os.ParcelUuid(BleConstants.SERVICE_UUID))
             .setIncludeDeviceName(false).build()
         advertiser.startAdvertising(settings, data, advertiseCallback)
         _syncStatus.value = SyncStatus.Advertising
+
+        // Only stay discoverable for a short window; CONNECT re-arms it
+        advertiseWindow?.cancel()
+        advertiseWindow = scope.launch {
+            delay(BleConstants.ADVERTISE_WINDOW_MS.toLong())
+            if (_syncStatus.value != SyncStatus.Syncing) stopAdvertising()
+        }
     }
 
     fun stopAdvertising() {
+        advertiseWindow?.cancel()
         btAdapter?.bluetoothLeAdvertiser?.stopAdvertising(advertiseCallback)
         gattServer?.close(); gattServer = null
+        assembler.reset()
         _syncStatus.value = SyncStatus.Idle
     }
 
     private fun setupGattServer() {
         val service = BluetoothGattService(BleConstants.SERVICE_UUID, BluetoothGattService.SERVICE_TYPE_PRIMARY)
 
+        // Every attribute requires an encrypted link, so the stack forces pairing before any data moves
         service.addCharacteristic(BluetoothGattCharacteristic(
             BleConstants.SYNC_REQUEST_UUID,
             BluetoothGattCharacteristic.PROPERTY_READ,
-            BluetoothGattCharacteristic.PERMISSION_READ
+            BluetoothGattCharacteristic.PERMISSION_READ_ENCRYPTED
         ))
 
         val dataChar = BluetoothGattCharacteristic(
             BleConstants.SYNC_DATA_UUID,
             BluetoothGattCharacteristic.PROPERTY_NOTIFY,
-            BluetoothGattCharacteristic.PERMISSION_READ
+            BluetoothGattCharacteristic.PERMISSION_READ_ENCRYPTED
         )
         dataChar.addDescriptor(BluetoothGattDescriptor(
             BleConstants.CLIENT_CONFIG_UUID,
-            BluetoothGattDescriptor.PERMISSION_READ or BluetoothGattDescriptor.PERMISSION_WRITE
+            BluetoothGattDescriptor.PERMISSION_READ_ENCRYPTED or BluetoothGattDescriptor.PERMISSION_WRITE_ENCRYPTED
         ))
         service.addCharacteristic(dataChar)
 
         service.addCharacteristic(BluetoothGattCharacteristic(
             BleConstants.SYNC_ACK_UUID,
             BluetoothGattCharacteristic.PROPERTY_WRITE,
-            BluetoothGattCharacteristic.PERMISSION_WRITE
+            BluetoothGattCharacteristic.PERMISSION_WRITE_ENCRYPTED
         ))
 
         service.addCharacteristic(BluetoothGattCharacteristic(
             BleConstants.PHONE_TO_WATCH_UUID,
             BluetoothGattCharacteristic.PROPERTY_WRITE,
-            BluetoothGattCharacteristic.PERMISSION_WRITE
+            BluetoothGattCharacteristic.PERMISSION_WRITE_ENCRYPTED
         ))
 
         gattServer = btManager?.openGattServer(context, gattServerCallback)
         gattServer?.addService(service)
+    }
+
+    private fun isBonded(device: BluetoothDevice) = device.bondState == BluetoothDevice.BOND_BONDED
+
+    private fun reject(device: BluetoothDevice, requestId: Int, responseNeeded: Boolean = true) {
+        if (responseNeeded)
+            gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_INSUFFICIENT_AUTHENTICATION, 0, null)
     }
 
     private val gattServerCallback = object : BluetoothGattServerCallback() {
@@ -101,9 +124,12 @@ class WearBleManager @Inject constructor(
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 _syncStatus.value = SyncStatus.Syncing
-                sendWatchData(device)
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                if (_syncStatus.value == SyncStatus.Syncing) _syncStatus.value = SyncStatus.Done
+                assembler.reset()
+                if (_syncStatus.value == SyncStatus.Syncing) {
+                    if (advertiseWindow?.isActive == true) _syncStatus.value = SyncStatus.Done
+                    else stopAdvertising()
+                }
             }
         }
 
@@ -111,10 +137,13 @@ class WearBleManager @Inject constructor(
             device: BluetoothDevice, requestId: Int, offset: Int,
             characteristic: BluetoothGattCharacteristic
         ) {
+            if (!isBonded(device)) return reject(device, requestId)
             if (characteristic.uuid == BleConstants.SYNC_REQUEST_UUID) {
                 val lastSync = prefs.getLong(BleConstants.KEY_LAST_SYNC, 0L)
                 val payload  = JSONObject().put("since", lastSync).toString().toByteArray()
                 gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, payload)
+            } else {
+                gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_READ_NOT_PERMITTED, 0, null)
             }
         }
 
@@ -123,6 +152,7 @@ class WearBleManager @Inject constructor(
             characteristic: BluetoothGattCharacteristic,
             preparedWrite: Boolean, responseNeeded: Boolean, offset: Int, value: ByteArray
         ) {
+            if (!isBonded(device)) return reject(device, requestId, responseNeeded)
             when (characteristic.uuid) {
                 BleConstants.PHONE_TO_WATCH_UUID -> handleIncomingChunk(value)
                 BleConstants.SYNC_ACK_UUID -> {
@@ -139,27 +169,20 @@ class WearBleManager @Inject constructor(
             descriptor: BluetoothGattDescriptor,
             preparedWrite: Boolean, responseNeeded: Boolean, offset: Int, value: ByteArray
         ) {
+            if (!isBonded(device)) return reject(device, requestId, responseNeeded)
             if (responseNeeded)
                 gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, null)
+            // Push our data only once a paired phone has subscribed over the encrypted link
+            if (descriptor.uuid == BleConstants.CLIENT_CONFIG_UUID &&
+                value.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)) {
+                sendWatchData(device)
+            }
         }
     }
 
     private fun handleIncomingChunk(raw: ByteArray) {
-        val prefix = raw.copyOf(minOf(raw.size, 20)).toString(Charsets.UTF_8)
-        val sep1   = prefix.indexOf(':')
-        val sep2   = prefix.indexOf(':', sep1 + 1)
-        if (sep1 < 0 || sep2 < 0) return
-        val idx   = prefix.substring(0, sep1).toIntOrNull() ?: return
-        val total = prefix.substring(sep1 + 1, sep2).toIntOrNull() ?: return
-        val data  = raw.sliceArray((sep2 + 1) until raw.size)
-
-        if (idx == 0) { incomingChunks.clear(); expectedChunkCount = total }
-        incomingChunks.add(data)
-
-        if (incomingChunks.size == expectedChunkCount) {
-            val json = incomingChunks.fold(byteArrayOf()) { acc, b -> acc + b }.toString(Charsets.UTF_8)
-            scope.launch { mergeIncomingData(json) }
-        }
+        val json = assembler.add(raw) ?: return
+        scope.launch { mergeIncomingData(json) }
     }
 
     private suspend fun mergeIncomingData(json: String) {
@@ -200,7 +223,7 @@ class WearBleManager @Inject constructor(
             chunks.forEach { chunk ->
                 dataChar.value = chunk
                 gattServer?.notifyCharacteristicChanged(device, dataChar, false)
-                kotlinx.coroutines.delay(20)
+                delay(20)
             }
         }
     }

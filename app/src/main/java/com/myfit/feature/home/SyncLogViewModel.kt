@@ -47,4 +47,6 @@ class SyncLogViewModel @Inject constructor(
     }
 
     fun startScan() = bleManager.startScanning()
+
+    fun forgetWatch() = bleManager.forgetWatch()
 }

@@ -41,6 +41,11 @@ fun SyncLogScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextSecondary)
                     }
                 },
+                actions = {
+                    TextButton(onClick = vm::forgetWatch) {
+                        Text("FORGET WATCH", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface1)
             )
         }

@@ -57,6 +57,46 @@ class SyncPayloadTest {
         assertFalse(SyncPayload.shouldMergeSet(999L, 1000L))
     }
 
+    @Test fun assembler_reassembles_in_order() {
+        val json      = SyncPayload.serialize(SyncData(listOf(session()), listOf(set())))
+        val assembler = ChunkAssembler()
+        val results   = SyncPayload.chunk(json, 40).map { assembler.add(it) }
+        assertTrue(results.dropLast(1).all { it == null })
+        assertEquals(json, results.last())
+    }
+
+    @Test fun assembler_rejects_out_of_order_and_garbage() {
+        val chunks    = SyncPayload.chunk("x".repeat(100), 10)
+        val assembler = ChunkAssembler()
+        assertNull(assembler.add(chunks[0]))
+        assertNull(assembler.add(chunks[2]))  // skipped idx 1 → reset
+        chunks.drop(1).forEach { assertNull(assembler.add(it)) }  // no idx 0 → never completes
+        assertNull(assembler.add("not a chunk".toByteArray()))
+    }
+
+    @Test fun assembler_enforces_size_cap() {
+        val assembler = ChunkAssembler(maxBytes = 50)
+        assertNull(SyncPayload.chunk("x".repeat(100), 10).map { assembler.add(it) }.last())
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun deserialize_rejects_out_of_range_reps() {
+        val json = SyncPayload.serialize(SyncData(emptyList(), listOf(set().copy(reps = 100_000))))
+        SyncPayload.deserialize(json)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun deserialize_rejects_unknown_source_device() {
+        val json = SyncPayload.serialize(SyncData(listOf(session().copy(sourceDevice = "evil")), emptyList()))
+        SyncPayload.deserialize(json)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun deserialize_rejects_oversized_notes() {
+        val json = SyncPayload.serialize(SyncData(listOf(session().copy(notes = "n".repeat(5_000))), emptyList()))
+        SyncPayload.deserialize(json)
+    }
+
     @Test fun deserialize_null_fields() {
         val data   = SyncData(
             sessions = listOf(WorkoutSessionEntity("s","x",1000L,null,"watch",null)),
